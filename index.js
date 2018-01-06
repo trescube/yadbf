@@ -137,6 +137,7 @@ function convertToObject(header, chunk) {
     }
   }
 
+  // keep track of how far we're into the record byte-wise
   let offset = 1;
 
   return header.fields.reduce((record, field) => {
@@ -161,8 +162,13 @@ function convertToObject(header, chunk) {
 
     } else if (field.type === 'F') {
       const value = chunk.toString('utf-8', offset, offset+field.length);
-      
+
       record[field.name] = parseFloat(value);
+
+    } else if (field.type === 'C') {
+      const value = chunk.toString('utf-8', offset, offset+field.length);
+
+      record[field.name] = value.replace(/[\u0000 ]+$/, '');
 
     } else {
       record[field.name] = chunk.toString('utf-8', offset, offset+field.length).replace(/\0/g, '');
