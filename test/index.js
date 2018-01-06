@@ -771,6 +771,52 @@ describe('record parsing', () => {
 
   });
 
+  describe('C-type field parsing', () => {
+    it('values should right-trimmed but not left-trimmed', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(1, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 10 bytes for character field
+      header.writeUInt16LE(1+10, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('C_field', 0, 'C_field'.length);
+      field1.write('C', 11);
+      field1.writeUInt8(10, 16); // length
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+10);
+      record1.write(' ', 0);
+      record1.write('  value   ', 1);
+
+      const readableStream = new Duplex();
+      readableStream.push(header);
+      readableStream.push(field1);
+      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(record1);
+      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(null);
+
+      yadbf(readableStream)
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('record', record => {
+          assert.equal(record.C_field, '  value');
+          done();
+        });
+
+    });
+
+  });
+
   describe('D-type field parsing', () => {
     it('D-type fields should be parsed as dates', done => {
       const header = Buffer.alloc(32);
@@ -1061,6 +1107,15 @@ describe('record parsing', () => {
   });
 
   describe('N-type field parsing', () => {
+    // F
+    // length: 19, precision: 11
+
+    // N
+    // length: 10, precision: 0
+    // length: 7,  precision: 0
+    // length: 19, precision: 8
+    // length: 5,  precision: 0
+
 
   });
 
@@ -1070,97 +1125,26 @@ describe('record parsing', () => {
 
 });
 
-// describe('parse', () => {
-//   describe('header stuff', () => {
-//     it('juneau file', function(done) {
-//       let recordCount = 0;
-//
-//       yadbf(fs.createReadStream('/Users/stephenhess/juneau.dbf'))
-//         .on('error', err => {
-//           assert.fail(`no error should have been thrown: ${err}`);
-//         })
-//         .on('header', actualHeader => {
-//           // console.error('HEADER: ');
-//           // console.error(actualHeader);
-//           assert.deepEqual(actualHeader, {
-//             version: 3,
-//             dateOfLastUpdate: new Date(2017, 11, 11),
-//             numberOfRecords: 13109,
-//             numberOfHeaderBytes: 289,
-//             numberOfBytesInRecord: 439,
-//             hasProductionMDXFile: 0x00,
-//             langaugeDriverId: 0,
-//             fields: [
-//               {
-//                 name: 'Shape_area',
-//                 type: 'F',
-//                 length: 19,
-//                 precision: 11,
-//                 // offset: 0
-//               },
-//               {
-//                 name: 'Shape_len',
-//                 type: 'F',
-//                 length: 19,
-//                 precision: 11,
-//                 // offset: 19
-//               },
-//               {
-//                 name: 'feat_type',
-//                 type: 'C',
-//                 length: 20,
-//                 precision: 0,
-//                 // offset: 38
-//               },
-//               {
-//                 name: 'tax_id',
-//                 type: 'C',
-//                 length: 32,
-//                 precision: 0,
-//                 // offset: 58
-//               },
-//               {
-//                 name: 'site_addrs',
-//                 type: 'C',
-//                 length: 254,
-//                 precision: 0,
-//                 // offset: 90
-//               },
-//               {
-//                 name: 'legal_desc',
-//                 type: 'C',
-//                 length: 34,
-//                 precision: 0,
-//                 // offset: 344
-//               },
-//               {
-//                 name: 'gis_date',
-//                 type: 'C',
-//                 length: 30,
-//                 precision: 0,
-//                 // offset: 378
-//               },
-//               {
-//                 name: 'dbms_date',
-//                 type: 'C',
-//                 length: 30,
-//                 precision: 0,
-//                 // offset: 408
-//               }
-//             ]
-//           });
-//         })
-//         .on('record', record => {
-//           recordCount++;
-//           // console.error(JSON.stringify(record));
-//         })
-//         .on('end', () => {
-//           console.error(`read ${recordCount} records`);
-//           done();
-//         });
-//
-//     });
-//
-//   });
-//
-// });
+it.skip('blah', done => {
+  let count = 1;
+
+  yadbf(fs.createReadStream('/home/trescube/data/tmp/alameda.dbf'))
+    .on('error', err => {
+      assert.fail(`no error should have been thrown: ${err}`);
+    })
+    .on('header', header => {
+      console.error(header);
+      // console.error(header.fields.filter(f => f.type === 'N'));
+    })
+    .on('record', record => {
+      if (count === 1) {
+        console.error(record);
+        count++;
+      }
+    })
+    .on('end', () => {
+      console.error('Done!');
+      done();
+    });
+
+});
