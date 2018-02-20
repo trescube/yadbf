@@ -222,10 +222,8 @@ module.exports = (source, encoding) => {
 
   // register a handler for all subsequent events
   source.on('readable', () => {
-    let chunk;
-
-    for (let i = 0; i < header.numberOfRecords; i++) {
-      chunk = source.read(header.numberOfBytesInRecord);
+    for (let i = 0; i < header.numberOfRecords; i+=1) {
+      const chunk = source.read(header.numberOfBytesInRecord);
 
       try {
         if (chunk.length === header.numberOfBytesInRecord && !isDeleted(chunk)) {
@@ -241,7 +239,7 @@ module.exports = (source, encoding) => {
 
     // all records have been read, so attempt to read the last byte and 
     // check for 0x1A (end-of-file marker)
-    chunk = source.read(1);
+    const chunk = source.read(1);
 
     if (!chunk || chunk.readUInt8(0) !== 0x1A) {
       source.emit('error', 'Last byte of file is not end-of-file marker');
