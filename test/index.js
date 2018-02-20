@@ -11,7 +11,7 @@ describe('header parsing', () => {
 
       yadbf(readableStream)
         .on('error', err => {
-          assert.equal(err, `Unable to parse first 32 bytes from header, found 0 byte(s)`);
+          assert.equal(err, 'Unable to parse first 32 bytes from header, found 0 byte(s)');
           done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
@@ -29,7 +29,7 @@ describe('header parsing', () => {
 
       yadbf(readableStream)
         .on('error', err => {
-          assert.equal(err, `Unable to parse first 32 bytes from header, found 31 byte(s)`);
+          assert.equal(err, 'Unable to parse first 32 bytes from header, found 31 byte(s)');
           done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
@@ -762,7 +762,7 @@ describe('record parsing', () => {
 
       yadbf(readableStream)
         .on('error', err => {
-          assert.equal(err, `Invalid deleted record value: #`);
+          assert.equal(err, 'Invalid deleted record value: #');
           done();
         })
         .on('record', assert.fail.bind(null, 'no record events should have been emitted'));
@@ -971,7 +971,7 @@ describe('record parsing', () => {
 
     });
 
-    it(`L-type fields should treat '?' as undefined`, done => {
+    it('L-type fields should treat \'?\' as undefined', done => {
       const header = Buffer.alloc(32);
       // valid version
       header.writeUInt8(0x8B, 0);
@@ -1014,7 +1014,7 @@ describe('record parsing', () => {
 
     });
 
-    it(`L-type fields should emit error on unknown fields`, done => {
+    it('L-type fields should emit error on unknown fields', done => {
       const header = Buffer.alloc(32);
       // valid version
       header.writeUInt8(0x8B, 0);
@@ -1050,17 +1050,17 @@ describe('record parsing', () => {
 
       yadbf(readableStream)
         .on('error', err => {
-          assert.equal(err, `Invalid L-type field value: R`);
+          assert.equal(err, 'Invalid L-type field value: R');
           done();
         })
-        .on('record', assert.fail.bind(null, 'no record events should have been emitted'))
+        .on('record', assert.fail.bind(null, 'no record events should have been emitted'));
 
     });
 
   });
 
   describe('F-type field parsing', () => {
-    it(`F-type field`, done => {
+    it('F-type field', done => {
       const header = Buffer.alloc(32);
       // valid version
       header.writeUInt8(0x8B, 0);
@@ -1260,10 +1260,10 @@ describe('record parsing', () => {
 
       yadbf(readableStream)
         .on('error', err => {
-          assert.equal(err, `Invalid M-type field value: '     4    '`);
+          assert.equal(err, 'Invalid M-type field value: \'     4    \'');
           done();
         })
-        .on('record', assert.fail.bind(null, 'no record events should have been emitted'))
+        .on('record', assert.fail.bind(null, 'no record events should have been emitted'));
 
     });
 

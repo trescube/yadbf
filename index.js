@@ -20,7 +20,7 @@ function readHeader(source) {
 
   // bail if no header bytes could be read
   if (!fileHeader) {
-    source.emit('error', `Unable to parse first 32 bytes from header, found 0 byte(s)`);
+    source.emit('error', 'Unable to parse first 32 bytes from header, found 0 byte(s)');
     return;
   }
 
@@ -90,7 +90,7 @@ function readHeader(source) {
   // m should be divisible by 32 since each field is described in exactly 32 bytes
   const numberOfFields = (fieldBytes.length-1)/32;
 
-  for (let i = 0; i < numberOfFields; i++) {
+  for (let i = 0; i < numberOfFields; i+=1) {
     const field = fieldBytes.slice(i*32, i*32+32);
 
     const length = field.readUInt8(16);
@@ -145,7 +145,7 @@ function convertToObject(header, chunk) {
     '@meta': {
       deleted: chunk.readUInt8(0) === 0x2A
     }
-  }
+  };
 
   // keep track of how far we're into the record byte-wise
   let offset = 1;
