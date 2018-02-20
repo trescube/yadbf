@@ -3,6 +3,9 @@ const yadbf = require('..');
 const Duplex = require('stream').Duplex;
 const fs = require('fs');
 
+const fieldDescriptorArrayTerminator = Buffer.from([0x0D]);
+const endOfFile = Buffer.from([0x1A]);
+
 describe('header parsing', () => {
   describe('insufficient header bytes', () => {
     it('no header should emit error', done => {
@@ -51,7 +54,8 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -73,7 +77,7 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -100,7 +104,7 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -124,7 +128,7 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -147,7 +151,7 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -176,7 +180,8 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -202,7 +207,8 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -229,6 +235,7 @@ describe('header parsing', () => {
     const readableStream = new Duplex();
     readableStream.push(header);
     readableStream.push(Buffer.from([0x0C]));
+    readableStream.push(endOfFile);
     readableStream.push(null);
 
     yadbf(readableStream)
@@ -255,7 +262,8 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -281,7 +289,8 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -307,7 +316,7 @@ describe('header parsing', () => {
 
       const readableStream = new Duplex();
       readableStream.push(header);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -346,7 +355,7 @@ describe('header parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -382,7 +391,7 @@ describe('header parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -418,7 +427,7 @@ describe('header parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -454,7 +463,7 @@ describe('header parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -490,7 +499,7 @@ describe('header parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -526,7 +535,7 @@ describe('header parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
       yadbf(readableStream)
@@ -583,13 +592,13 @@ describe('header parsing', () => {
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(field2);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       yadbf(readableStream)
         .on('error', err => {
           assert.fail(`no error should have been thrown: ${err}`);
-          console.error('in error handler');
         })
         .on('header', actualHeader => {
           assert.deepEqual(actualHeader, {
@@ -636,7 +645,7 @@ describe('record parsing', () => {
       // valid version
       header.writeUInt8(0x8B, 0);
       // # of records, # of header bytes
-      header.writeUInt32LE(2, 4);
+      header.writeUInt32LE(3, 4);
       header.writeUInt16LE(32+32+32+1, 8);
       // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field, 30 bytes 2nd field
       header.writeUInt16LE(1+25+30, 10);
@@ -685,11 +694,11 @@ describe('record parsing', () => {
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(field2);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
       readableStream.push(record2);
       readableStream.push(record3);
-      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       const records = [];
@@ -753,7 +762,7 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
@@ -766,6 +775,93 @@ describe('record parsing', () => {
           done();
         })
         .on('record', assert.fail.bind(null, 'no record events should have been emitted'));
+
+    });
+
+    it('an error should be omitted when file does not end with 0x1A', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(1, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field
+      header.writeUInt16LE(1+25, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('field1', 0, 'field1'.length);
+      field1.write('C', 11);
+      field1.writeUInt8(25, 16); // length
+      field1.writeUInt8(104, 17); // precision
+      field1.writeUInt16LE(119, 18); // work area id
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+25);
+      record1.write(' ', 0, 1);
+      record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
+
+      const readableStream = new Duplex();
+      readableStream.push(header);
+      readableStream.push(field1);
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(record1);
+      readableStream.push(null);
+
+      yadbf(readableStream)
+        .on('error', err => {
+          assert.equal(err, 'Last byte of file is not end-of-file marker');
+          done();
+        });
+
+    });
+
+    it('an error should be omitted when last character is not 0x1A', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(1, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field
+      header.writeUInt16LE(1+25, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('field1', 0, 'field1'.length);
+      field1.write('C', 11);
+      field1.writeUInt8(25, 16); // length
+      field1.writeUInt8(104, 17); // precision
+      field1.writeUInt16LE(119, 18); // work area id
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+25);
+      record1.write(' ', 0, 1);
+      record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
+
+      const readableStream = new Duplex();
+      readableStream.push(header);
+      readableStream.push(field1);
+      readableStream.push(fieldDescriptorArrayTerminator);
+      readableStream.push(record1);
+      readableStream.push(Buffer.from([0x1B]));
+      readableStream.push(null);
+
+      yadbf(readableStream)
+        .on('error', err => {
+          assert.equal(err, 'Last byte of file is not end-of-file marker');
+          done();
+        });
 
     });
 
@@ -801,7 +897,7 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
@@ -849,9 +945,9 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
-      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(Buffer.from([0x1A]));
       readableStream.push(null);
 
       const records = [];
@@ -909,7 +1005,7 @@ describe('record parsing', () => {
         const readableStream = new Duplex();
         readableStream.push(header);
         readableStream.push(field1);
-        readableStream.push(Buffer.from([0x0D]));
+        readableStream.push(fieldDescriptorArrayTerminator);
         readableStream.push(record1);
         readableStream.push(Buffer.from([0x0A]));
         readableStream.push(null);
@@ -955,7 +1051,7 @@ describe('record parsing', () => {
         const readableStream = new Duplex();
         readableStream.push(header);
         readableStream.push(field1);
-        readableStream.push(Buffer.from([0x0D]));
+        readableStream.push(fieldDescriptorArrayTerminator);
         readableStream.push(record1);
         readableStream.push(Buffer.from([0x0A]));
         readableStream.push(null);
@@ -1000,7 +1096,7 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
@@ -1043,7 +1139,7 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
@@ -1090,7 +1186,7 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
@@ -1134,7 +1230,7 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
@@ -1181,9 +1277,9 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
-      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       const records = [];
@@ -1238,9 +1334,9 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
-      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(endOfFile);
       readableStream.push(null);
 
       const records = [];
@@ -1295,12 +1391,10 @@ describe('record parsing', () => {
       const readableStream = new Duplex();
       readableStream.push(header);
       readableStream.push(field1);
-      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
-      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(endOfFile);
       readableStream.push(null);
-
-      const records = [];
 
       yadbf(readableStream)
         .on('error', err => {

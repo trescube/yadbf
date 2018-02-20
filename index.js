@@ -12,8 +12,8 @@ const supportedFieldTypes = ['C', 'D', 'F', 'L', 'M', 'N'];
 const truthyValues = ['Y', 'y', 'T', 't'];
 const falseyValues = ['N', 'n', 'F', 'f'];
 
-// 
-const tenNumbersRegex = /^\d{10}$/;
+// valid M-type value regex
+const validMTypeValueRegex = /^(\d{10}| {10})$/;
 
 function readHeader(source) {
   const fileHeader = source.read(32);
@@ -143,7 +143,7 @@ function readHeader(source) {
 function convertToObject(header, chunk) {
   const record = {
     '@meta': {
-      deleted: chunk.readUInt8(0) === 0x2A
+      deleted: isDeleted(chunk)
     }
   };
 
@@ -151,18 +151,18 @@ function convertToObject(header, chunk) {
   let offset = 1;
 
   return header.fields.reduce((record, field) => {
+    const value = chunk.toString('utf-8', offset, offset+field.length);
+
     if (field.type === 'D') {
       // read D-type fields as dates
       record[field.name] = new Date(
-        chunk.toString('utf-8', offset+0, offset+4),
-        chunk.toString('utf-8', offset+4, offset+6),
-        chunk.toString('utf-8', offset+6, offset+8)
+        value.substr(0, 4),
+        value.substr(4, 2),
+        value.substr(6, 2)
       );
 
     }
     else if (field.type === 'L') {
-      const value = chunk.toString('utf-8', offset, offset+field.length);
-
       if (truthyValues.indexOf(value) >= 0) {
         record[field.name] = true;
       } else if (falseyValues.indexOf(value) >= 0) {
@@ -172,37 +172,18 @@ function convertToObject(header, chunk) {
       }
 
     }
-    else if (field.type === 'F') {
-      const value = chunk.toString('utf-8', offset, offset+field.length);
-
+    else if (field.type === 'F' || field.type === 'N') {
       record[field.name] = parseFloat(value);
-
-    }
-    else if (field.type === 'N') {
-      const value = chunk.toString('utf-8', offset, offset+field.length);
-
-      record[field.name] = parseFloat(value);
-
     }
     else if (field.type === 'C') {
-      const value = chunk.toString('utf-8', offset, offset+field.length);
-
       record[field.name] = value.replace(/[\u0000 ]+$/, '');
-
     }
     else if (field.type === 'M') {
-      const value = chunk.toString('utf-8', offset, offset+field.length);
-
-      if (value !== '          ' && !tenNumbersRegex.test(value)) {
+      if (!validMTypeValueRegex.test(value)) {
         throw `Invalid M-type field value: '${value}'`;
       } else {
         record[field.name] = value;
       }
-
-
-    }
-    else {
-      record[field.name] = chunk.toString('utf-8', offset, offset+field.length).replace(/\0/g, '');
 
     }
 
@@ -243,11 +224,12 @@ module.exports = (source, encoding) => {
   source.on('readable', () => {
     let chunk;
 
-    while (null !== (chunk = source.read(header.numberOfBytesInRecord))) {
+    for (let i = 0; i < header.numberOfRecords; i++) {
+      chunk = source.read(header.numberOfBytesInRecord);
+
       try {
         if (chunk.length === header.numberOfBytesInRecord && !isDeleted(chunk)) {
-          const record = convertToObject(header, chunk);
-          source.emit('record', record);
+          source.emit('record', convertToObject(header, chunk));
         }
 
       }
@@ -255,6 +237,14 @@ module.exports = (source, encoding) => {
         source.emit('error', err.toString());
       }
 
+    }
+
+    // all records have been read, so attempt to read the last byte and 
+    // check for 0x1A (end-of-file marker)
+    chunk = source.read(1);
+
+    if (!chunk || chunk.readUInt8(0) !== 0x1A) {
+      source.emit('error', 'Last byte of file is not end-of-file marker');
     }
 
   });
