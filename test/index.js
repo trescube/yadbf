@@ -825,7 +825,7 @@ describe('record parsing', () => {
       // # of records, # of header bytes
       header.writeUInt32LE(1, 4);
       header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field, 30 bytes 2nd field
+      // # of bytes per record: 1 byte deleted flag, 8 bytes for 'D' field
       header.writeUInt16LE(1+8, 10);
       // encryption flag
       header.writeUInt8(0x00, 15);
@@ -1106,45 +1106,167 @@ describe('record parsing', () => {
 
   });
 
-  describe('N-type field parsing', () => {
-    // F
-    // length: 19, precision: 11
-
-    // N
-    // length: 10, precision: 0
-    // length: 7,  precision: 0
-    // length: 19, precision: 8
-    // length: 5,  precision: 0
-
-
-  });
-
   describe('M-type field parsing', () => {
+    it('field values consisting of all numbers should be accepted', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(1, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 10 bytes for 'M' field
+      header.writeUInt16LE(1+10, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('field1', 0, 'field1'.length);
+      field1.write('M', 11);
+      field1.writeUInt8(10, 16); // length
+      field1.writeUInt16LE(119, 18); // work area id
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+10);
+      record1.write(' ', 0, 1);
+      record1.write('1357924680', 1, 10);
+
+      const readableStream = new Duplex();
+      readableStream.push(header);
+      readableStream.push(field1);
+      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(record1);
+      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(null);
+
+      const records = [];
+
+      yadbf(readableStream)
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('record', record => {
+          records.push(record);
+        })
+        .on('end', () => {
+          assert.deepEqual(records, [
+            {
+              '@meta': {
+                deleted: false
+              },
+              field1: '1357924680'
+            }
+          ]);
+
+          done();
+        });
+
+    });
+
+    it('field values consisting of all spaces should be accepted', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(1, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 10 bytes for 'M' field
+      header.writeUInt16LE(1+10, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('field1', 0, 'field1'.length);
+      field1.write('M', 11);
+      field1.writeUInt8(10, 16); // length
+      field1.writeUInt16LE(119, 18); // work area id
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+10);
+      record1.write(' ', 0, 1);
+      record1.write('          ', 1, 10);
+
+      const readableStream = new Duplex();
+      readableStream.push(header);
+      readableStream.push(field1);
+      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(record1);
+      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(null);
+
+      const records = [];
+
+      yadbf(readableStream)
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('record', record => {
+          records.push(record);
+        })
+        .on('end', () => {
+          assert.deepEqual(records, [
+            {
+              '@meta': {
+                deleted: false
+              },
+              field1: '          '
+            }
+          ]);
+
+          done();
+        });
+
+    });
+
+    it('field values not entirely number or spaces should emit error', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(1, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 10 bytes for 'M' field
+      header.writeUInt16LE(1+10, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('field1', 0, 'field1'.length);
+      field1.write('M', 11);
+      field1.writeUInt8(10, 16); // length
+      field1.writeUInt16LE(119, 18); // work area id
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+10);
+      record1.write(' ', 0, 1);
+      record1.write('     4    ', 1, 10);
+
+      const readableStream = new Duplex();
+      readableStream.push(header);
+      readableStream.push(field1);
+      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(record1);
+      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(null);
+
+      const records = [];
+
+      yadbf(readableStream)
+        .on('error', err => {
+          assert.equal(err, `Invalid M-type field value: '     4    '`);
+          done();
+        })
+        .on('record', assert.fail.bind(null, 'no record events should have been emitted'))
+
+    });
 
   });
-
-});
-
-it.skip('blah', done => {
-  let count = 1;
-
-  yadbf(fs.createReadStream('/home/trescube/data/tmp/alameda.dbf'))
-    .on('error', err => {
-      assert.fail(`no error should have been thrown: ${err}`);
-    })
-    .on('header', header => {
-      console.error(header);
-      // console.error(header.fields.filter(f => f.type === 'N'));
-    })
-    .on('record', record => {
-      if (count === 1) {
-        console.error(record);
-        count++;
-      }
-    })
-    .on('end', () => {
-      console.error('Done!');
-      done();
-    });
 
 });

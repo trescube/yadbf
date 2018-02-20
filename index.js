@@ -1,9 +1,19 @@
 // http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
 
-const supportedVersions = [0x03, 0x83, 0xF5, 0x8B, 0x8E];
+// see: https://github.com/infused/dbf/blob/master/lib/dbf/table.rb
+const supportedVersions = [
+  0x03, // FoxBASE+/Dbase III plus, no memo
+  0x83, // FoxBASE+/dBASE III PLUS, with memo
+  0xF5, // FoxPro 2.x (or earlier) with memo
+  0x8B, // dBASE IV with memo
+  0x8E  // ?
+];
 const supportedFieldTypes = ['C', 'D', 'F', 'L', 'M', 'N'];
 const truthyValues = ['Y', 'y', 'T', 't'];
 const falseyValues = ['N', 'n', 'F', 'f'];
+
+// 
+const tenNumbersRegex = /^\d{10}$/;
 
 function readHeader(source) {
   const fileHeader = source.read(32);
@@ -149,7 +159,8 @@ function convertToObject(header, chunk) {
         chunk.toString('utf-8', offset+6, offset+8)
       );
 
-    } else if (field.type === 'L') {
+    }
+    else if (field.type === 'L') {
       const value = chunk.toString('utf-8', offset, offset+field.length);
 
       if (truthyValues.indexOf(value) >= 0) {
@@ -160,17 +171,31 @@ function convertToObject(header, chunk) {
         throw `Invalid L-type field value: ${value}`;
       }
 
-    } else if (field.type === 'F') {
+    }
+    else if (field.type === 'F') {
       const value = chunk.toString('utf-8', offset, offset+field.length);
 
       record[field.name] = parseFloat(value);
 
-    } else if (field.type === 'C') {
+    }
+    else if (field.type === 'C') {
       const value = chunk.toString('utf-8', offset, offset+field.length);
 
       record[field.name] = value.replace(/[\u0000 ]+$/, '');
 
-    } else {
+    }
+    else if (field.type === 'M') {
+      const value = chunk.toString('utf-8', offset, offset+field.length);
+
+      if (value !== '          ' && !tenNumbersRegex.test(value)) {
+        throw `Invalid M-type field value: '${value}'`;
+      } else {
+        record[field.name] = value;
+      }
+
+
+    }
+    else {
       record[field.name] = chunk.toString('utf-8', offset, offset+field.length).replace(/\0/g, '');
 
     }
