@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "mocha"
+    "lint": "eslint .",
+    "travis": "npm test",
+    "test": "mocha",
+    "validate": "npm ls"
   },
   "keywords": [
     "DBF"
@@ -12,6 +15,57 @@
   "author": "Stephen Hess",
   "license": "MIT",
   "devDependencies": {
+    "eslint": "^4.15.0",
     "mocha": "^4.0.1"
-  }
+  },
+  "pre-commit": [
+    "lint",
+    "validate",
+    "test"
+  ],
+  "eslintConfig": {
+    "env": {
+      "node": true,
+      "es6": true,
+      "mocha": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 2017
+    },
+    "rules": {
+      "curly": "error",
+      "eqeqeq": "error",
+      "max-depth": [
+        "error",
+        4
+      ],
+      "max-len": [
+        "error",
+        140
+      ],
+      "max-params": [
+        "error",
+        4
+      ],
+      "newIsCap": true,
+      "no-global-assign": "error",
+      "no-empty": "error",
+      "no-unreachable": "error",
+      "no-new": "error",
+      "no-plusplus": "error",
+      "no-undef": "error",
+      "no-unused-expressions": "error",
+      "quotes": [
+        "error",
+        "single"
+      ],
+      "semi": [
+        "error",
+        "always"
+      ]
+    }
+  },
+  "eslintIgnore": [
+    "node_modules"
+  ]
 }
