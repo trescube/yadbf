@@ -1059,7 +1059,7 @@ describe('record parsing', () => {
 
   });
 
-  describe('F-type field parsing', () => {
+  describe('F/n-type field parsing', () => {
     it('F-type field', done => {
       const header = Buffer.alloc(32);
       // valid version
@@ -1099,6 +1099,50 @@ describe('record parsing', () => {
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           assert.equal(record.F_field, 123.45678);
+          done();
+        });
+
+    });
+
+    it('N-type field', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(1, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte for deleted flag, 19 byte for logical field
+      header.writeUInt16LE(1+19, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('N_field', 0, 'N_field'.length);
+      field1.write('N', 11);
+      field1.writeUInt8(19, 16); // length
+      field1.writeUInt8(11, 17); // precision
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+19);
+      record1.write(' ', 0);
+      record1.write('123.45678', 1, '123.45678'.length);
+
+      const readableStream = new Duplex();
+      readableStream.push(header);
+      readableStream.push(field1);
+      readableStream.push(Buffer.from([0x0D]));
+      readableStream.push(record1);
+      readableStream.push(Buffer.from([0x0A]));
+      readableStream.push(null);
+
+      yadbf(readableStream)
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('record', record => {
+          assert.equal(record.N_field, 123.45678);
           done();
         });
 

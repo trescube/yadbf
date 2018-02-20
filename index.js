@@ -178,6 +178,12 @@ function convertToObject(header, chunk) {
       record[field.name] = parseFloat(value);
 
     }
+    else if (field.type === 'N') {
+      const value = chunk.toString('utf-8', offset, offset+field.length);
+
+      record[field.name] = parseFloat(value);
+
+    }
     else if (field.type === 'C') {
       const value = chunk.toString('utf-8', offset, offset+field.length);
 
