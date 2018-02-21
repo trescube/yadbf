@@ -1,0 +1,13 @@
+sudo: false
+language: node_js
+notifications:
+  email: false
+node_js:
+  - 6
+matrix:
+  fast_finish: true
+script: npm run travis
+# `npm prune` removes dbfstream (the trescube branch),
+#  but can be uncommented when github.com/trescube/yadbf is released and switched to
+# before_script:
+#   - npm prune
