@@ -47,10 +47,20 @@ describe('header parsing', () => {
       const header = Buffer.alloc(32);
       // set a supported version number
       header.writeUInt8(0x03, 0);
-      // set encryption flag
-      header.writeUInt8(0, 15);
-      // set number of header bytes
-      header.writeInt16LE(33, 8);
+      // year/month/day
+      header.writeUInt8(97, 1);
+      header.writeUInt8(6, 2);
+      header.writeUInt8(25, 3);
+      // # of records, # of header bytes, # of bytes per record
+      header.writeUInt32LE(0, 4);
+      header.writeUInt16LE(32+1, 8);
+      header.writeUInt16LE(17, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+      // language driver id/name
+      header.writeUInt8(17, 29);
 
       const readableStream = new Duplex();
       readableStream.push(header);
@@ -171,12 +181,20 @@ describe('header parsing', () => {
       const header = Buffer.alloc(32);
       // valid version
       header.writeUInt8(0x8B, 0);
-      // valid number of header bytes
+      // year/month/day
+      header.writeUInt8(97, 1);
+      header.writeUInt8(6, 2);
+      header.writeUInt8(25, 3);
+      // # of records, # of header bytes, # of bytes per record
+      header.writeUInt32LE(0, 4);
       header.writeUInt16LE(32+1, 8);
-      // valid encryption flag
+      header.writeUInt16LE(17, 10);
+      // encryption flag
       header.writeUInt8(0x00, 15);
-      // valid has production MDX file
-      header.writeUInt8(0x00, 28);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+      // language driver id/name
+      header.writeUInt8(17, 29);
 
       const readableStream = new Duplex();
       readableStream.push(header);
@@ -253,12 +271,20 @@ describe('header parsing', () => {
       const header = Buffer.alloc(32);
       // set valid version
       header.writeUInt8(0x03, 0);
-      // set valid number of header bytes
-      header.writeInt16LE(33, 8);
-      // set valid encryption value
+      // year/month/day
+      header.writeUInt8(97, 1);
+      header.writeUInt8(6, 2);
+      header.writeUInt8(25, 3);
+      // # of records, # of header bytes, # of bytes per record
+      header.writeUInt32LE(0, 4);
+      header.writeUInt16LE(32+1, 8);
+      header.writeUInt16LE(17, 10);
+      // encryption flag
       header.writeUInt8(0x00, 15);
-      // set valid production MDX file existence value
+      // has production MDX file
       header.writeUInt8(0x00, 28);
+      // language driver id/name
+      header.writeUInt8(17, 29);
 
       const readableStream = new Duplex();
       readableStream.push(header);
@@ -280,12 +306,20 @@ describe('header parsing', () => {
       const header = Buffer.alloc(32);
       // set valid version
       header.writeUInt8(0x03, 0);
-      // set valid number of header bytes
-      header.writeInt16LE(33, 8);
-      // set unencrypted value
+      // year/month/day
+      header.writeUInt8(97, 1);
+      header.writeUInt8(6, 2);
+      header.writeUInt8(25, 3);
+      // # of records, # of header bytes, # of bytes per record
+      header.writeUInt32LE(0, 4);
+      header.writeUInt16LE(32+1, 8);
+      header.writeUInt16LE(17, 10);
+      // encryption flag
       header.writeUInt8(0x00, 15);
-      // set production MDX file existence to 1
+      // has production MDX file
       header.writeUInt8(0x01, 28);
+      // language driver id/name
+      header.writeUInt8(17, 29);
 
       const readableStream = new Duplex();
       readableStream.push(header);
@@ -811,6 +845,7 @@ describe('record parsing', () => {
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(record1);
+      readableStream.push(Buffer.from('Z'));
       readableStream.push(null);
 
       yadbf(readableStream)
