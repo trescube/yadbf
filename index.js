@@ -209,7 +209,7 @@ function isDeleted(chunk) {
 
 }
 
-module.exports = (source, encoding) => {
+module.exports = (source, options) => {
   let header;
 
   // read the header first, only emitting if successfully parsed
