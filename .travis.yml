@@ -4,10 +4,9 @@ notifications:
   email: false
 node_js:
   - 6
+  - 8
 matrix:
   fast_finish: true
 script: npm run travis
-# `npm prune` removes dbfstream (the trescube branch),
-#  but can be uncommented when github.com/trescube/yadbf is released and switched to
-# before_script:
-#   - npm prune
+before_script:
+  - npm prune
