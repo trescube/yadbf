@@ -1,7 +1,8 @@
 const assert = require('assert');
 const yadbf = require('..');
-const Duplex = require('stream').Duplex;
+const Readable = require('stream').Readable;
 const fs = require('fs');
+const through2 = require('through2');
 
 const fieldDescriptorArrayTerminator = Buffer.from([0x0D]);
 const endOfFile = Buffer.from([0x1A]);
@@ -9,10 +10,13 @@ const endOfFile = Buffer.from([0x1A]);
 describe('header parsing', () => {
   describe('insufficient header bytes', () => {
     it('no header should emit error', done => {
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Unable to parse first 32 bytes from header, found 0 byte(s)');
           done();
@@ -26,11 +30,14 @@ describe('header parsing', () => {
       // there should be at least 32 header bytes
       const header = Buffer.alloc(31);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Unable to parse first 32 bytes from header, found 31 byte(s)');
           done();
@@ -62,13 +69,16 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error event should have been emitted'))
         .on('header', actualHeader => {
           assert.equal(actualHeader.version, 3);
@@ -85,12 +95,15 @@ describe('header parsing', () => {
       // set encryption flag
       header.writeUInt8(0, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Unsupported version: 2');
           done();
@@ -112,12 +125,15 @@ describe('header parsing', () => {
       // set encryption value
       header.writeUInt8(0x01, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Encryption flag is set, cannot process');
           done();
@@ -136,12 +152,15 @@ describe('header parsing', () => {
       // set unencrypted value
       header.writeUInt8(0x00, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error event should have been emitted'))
         .on('header', actualHeader => {
           done();
@@ -159,12 +178,15 @@ describe('header parsing', () => {
       // set invalid encryption value
       header.writeUInt8(0x02, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid encryption flag value: 2');
           done();
@@ -196,13 +218,16 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('header', actualHeader => {
           assert.deepEqual(actualHeader.fields, []);
@@ -223,13 +248,16 @@ describe('header parsing', () => {
       // set unencrypted value
       header.writeUInt8(0x00, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid number of header bytes: 34');
           done();
@@ -250,13 +278,16 @@ describe('header parsing', () => {
     // set unencrypted value
     header.writeUInt8(0x00, 15);
 
-    const readableStream = new Duplex();
+    const readableStream = new Readable();
     readableStream.push(header);
     readableStream.push(Buffer.from([0x0C]));
     readableStream.push(endOfFile);
     readableStream.push(null);
 
-    yadbf(readableStream)
+    var stream = yadbf.stream();
+    readableStream.pipe(stream);
+
+    stream
       .on('error', err => {
         assert.equal(err, 'Invalid field descriptor array terminator at byte 33');
         done();
@@ -286,13 +317,16 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error event should have been emitted'))
         .on('header', actualHeader => {
           assert.ok(!actualHeader.hasProductionMDXFile);
@@ -321,13 +355,16 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error event should have been emitted'))
         .on('header', actualHeader => {
           assert.ok(actualHeader.hasProductionMDXFile);
@@ -348,12 +385,15 @@ describe('header parsing', () => {
       // set invalid production MDX file existence value
       header.writeUInt8(0x02, 28);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid production MDX file existence value: 2');
           done();
@@ -386,13 +426,16 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag, ERROR CONDITION: must be either 0x00 or 0x01
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Field length must be less than 255');
           done();
@@ -422,13 +465,16 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag, ERROR CONDITION: must be either 0x00 or 0x01
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Field type must be one of: C, D, F, L, M, N');
           done();
@@ -458,13 +504,16 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x02, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid indexed in production MDX file value: 2');
           done();
@@ -494,13 +543,16 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid D (date) field length: 9');
           done();
@@ -530,13 +582,16 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid L (logical) field length: 2');
           done();
@@ -566,13 +621,16 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid M (memo) field length: 11');
           done();
@@ -622,7 +680,7 @@ describe('header parsing', () => {
       field2.writeUInt16LE(120, 18); // work area id
       field2.writeUInt8(0, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(field2);
@@ -630,7 +688,10 @@ describe('header parsing', () => {
       readableStream.push(endOfFile);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.fail(`no error should have been thrown: ${err}`);
         })
@@ -724,7 +785,7 @@ describe('record parsing', () => {
       record3.write('record 3 field 1 value', 1+0, 'record 3 field 1 value'.length);
       record3.write('record 3 field 2 value', 1+25, 'record 3 field 2 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(field2);
@@ -736,8 +797,12 @@ describe('record parsing', () => {
       readableStream.push(null);
 
       const records = [];
+      const records2 = [];
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           records.push(record);
@@ -759,9 +824,29 @@ describe('record parsing', () => {
               field2: 'record 3 field 2 value'
             }
           ]);
+          assert.deepEqual(records2, [
+            {
+              '@meta': {
+                deleted: false
+              },
+              field1: 'record 1 field 1 value',
+              field2: 'record 1 field 2 value'
+            },
+            {
+              '@meta': {
+                deleted: false
+              },
+              field1: 'record 3 field 1 value',
+              field2: 'record 3 field 2 value'
+            }
+          ]);
 
           done();
-        });
+        })
+        .pipe( through2.obj( function( record, _, next ){
+          records2.push( record );
+          next();
+        }));
 
     });
 
@@ -793,7 +878,7 @@ describe('record parsing', () => {
       record1.write('#', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -803,7 +888,10 @@ describe('record parsing', () => {
 
       const records = [];
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid deleted record value: #');
           done();
@@ -840,7 +928,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -848,7 +936,10 @@ describe('record parsing', () => {
       readableStream.push(Buffer.from('Z'));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
           done();
@@ -884,7 +975,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -892,7 +983,10 @@ describe('record parsing', () => {
       readableStream.push(Buffer.from([0x1B]));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
           done();
@@ -929,7 +1023,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('  value   ', 1);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -937,7 +1031,10 @@ describe('record parsing', () => {
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           assert.equal(record.C_field, '  value');
@@ -977,7 +1074,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('19520719', 1, 8);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -987,7 +1084,10 @@ describe('record parsing', () => {
 
       const records = [];
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           records.push(record);
@@ -1037,7 +1137,7 @@ describe('record parsing', () => {
         record1.write(' ', 0);
         record1.write(truthy_value, 1);
 
-        const readableStream = new Duplex();
+        const readableStream = new Readable();
         readableStream.push(header);
         readableStream.push(field1);
         readableStream.push(fieldDescriptorArrayTerminator);
@@ -1045,7 +1145,11 @@ describe('record parsing', () => {
         readableStream.push(Buffer.from([0x0A]));
         readableStream.push(null);
 
-        yadbf(readableStream)
+
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
           .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
           .on('record', record => {
             assert.equal(record.L_field, true);
@@ -1083,7 +1187,7 @@ describe('record parsing', () => {
         record1.write(' ', 0);
         record1.write(falsey_value, 1);
 
-        const readableStream = new Duplex();
+        const readableStream = new Readable();
         readableStream.push(header);
         readableStream.push(field1);
         readableStream.push(fieldDescriptorArrayTerminator);
@@ -1091,7 +1195,11 @@ describe('record parsing', () => {
         readableStream.push(Buffer.from([0x0A]));
         readableStream.push(null);
 
-        yadbf(readableStream)
+
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
           .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
           .on('record', record => {
             assert.equal(record.L_field, false);
@@ -1128,7 +1236,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('?', 1);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1136,7 +1244,10 @@ describe('record parsing', () => {
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           assert.equal(record.L_field, undefined);
@@ -1171,7 +1282,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('R', 1);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1179,7 +1290,10 @@ describe('record parsing', () => {
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid L-type field value: R');
           done();
@@ -1218,7 +1332,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('123.45678', 1, '123.45678'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1226,7 +1340,10 @@ describe('record parsing', () => {
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           assert.equal(record.F_field, 123.45678);
@@ -1262,7 +1379,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('123.45678', 1, '123.45678'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1270,7 +1387,10 @@ describe('record parsing', () => {
       readableStream.push(Buffer.from([0x0A]));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           assert.equal(record.N_field, 123.45678);
@@ -1309,7 +1429,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('1357924680', 1, 10);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1319,7 +1439,10 @@ describe('record parsing', () => {
 
       const records = [];
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           records.push(record);
@@ -1366,7 +1489,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('          ', 1, 10);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1376,7 +1499,10 @@ describe('record parsing', () => {
 
       const records = [];
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('record', record => {
           records.push(record);
@@ -1423,7 +1549,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('     4    ', 1, 10);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1431,7 +1557,10 @@ describe('record parsing', () => {
       readableStream.push(endOfFile);
       readableStream.push(null);
 
-      yadbf(readableStream)
+      var stream = yadbf.stream();
+      readableStream.pipe(stream);
+
+      stream
         .on('error', err => {
           assert.equal(err, 'Invalid M-type field value: \'     4    \'');
           done();

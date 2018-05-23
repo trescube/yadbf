@@ -1,4 +1,5 @@
 // http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
+var through2 = require('through2');
 
 // see: https://github.com/infused/dbf/blob/master/lib/dbf/table.rb
 const supportedVersions = [
@@ -250,4 +251,44 @@ module.exports = (source, options) => {
 
   return source;
 
+};
+
+
+module.exports.stream = (options) => {
+
+  var proxy = through2({
+    objectMode: false,
+    highWaterMark: 16384 // 16kb
+  });
+
+  var stream = through2({
+    writableObjectMode: false,
+    writableHighWaterMark: 16384, // 16kb
+    readableObjectMode: true,
+    readableHighWaterMark: 512
+  },
+    proxy.write.bind(proxy),
+    proxy.end.bind(proxy)
+  );
+
+  proxy.on('error', stream.emit.bind(stream, 'error'));
+  proxy.on('header', stream.emit.bind(stream, 'header'));
+  proxy.on('record', stream.emit.bind(stream, 'record'));
+  proxy.on('record', stream.push.bind(stream));
+  proxy.once('end', stream.emit.bind(stream, 'end'));
+
+  proxy.once('readable', function(){
+    process.nextTick(function(){
+      process.nextTick(function(){
+        process.nextTick(function(){
+          process.nextTick(function(){
+            var yadbf = module.exports(proxy, options);
+            proxy.emit('readable');
+          });
+        });
+      });
+    });
+  });
+
+  return stream;
 };
