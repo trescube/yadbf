@@ -67,5 +67,8 @@
   },
   "eslintIgnore": [
     "node_modules"
-  ]
+  ],
+  "dependencies": {
+    "through2": "^2.0.3"
+  }
 }
