@@ -256,29 +256,36 @@ module.exports = (source, options) => {
 
 module.exports.stream = (options) => {
 
-  var stream = through2({
-    objectMode: true,
+  var proxy = through2({
+    objectMode: false,
     highWaterMark: 16384 // 16kb
   });
 
-  var proxy = through2();
+  var stream = through2({
+    writableObjectMode: false,
+    writableHighWaterMark: 16384, // 16kb
+    readableObjectMode: true,
+    readableHighWaterMark: 512
+  },
+    proxy.write.bind(proxy),
+    proxy.end.bind(proxy)
+  );
+
   proxy.on('error', stream.emit.bind(stream, 'error'));
   proxy.on('header', stream.emit.bind(stream, 'header'));
   proxy.on('record', stream.emit.bind(stream, 'record'));
   proxy.on('record', stream.push.bind(stream));
-
-  // hackery to enable pushing data on to stream after it has ended
-  stream._end = stream.end;
-  stream.end = proxy.end.bind(proxy);
-  proxy.once('end', stream._end.bind(stream));
   proxy.once('end', stream.emit.bind(stream, 'end'));
-  stream.pipe(proxy);
 
   proxy.once('readable', function(){
     process.nextTick(function(){
       process.nextTick(function(){
-        var yadbf = module.exports(proxy, options);
-        proxy.emit('readable');
+        process.nextTick(function(){
+          process.nextTick(function(){
+            var yadbf = module.exports(proxy, options);
+            proxy.emit('readable');
+          });
+        });
       });
     });
   });

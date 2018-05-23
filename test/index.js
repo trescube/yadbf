@@ -1,7 +1,8 @@
 const assert = require('assert');
 const yadbf = require('..');
-const Duplex = require('stream').Duplex;
+const Readable = require('stream').Readable;
 const fs = require('fs');
+const through2 = require('through2');
 
 const fieldDescriptorArrayTerminator = Buffer.from([0x0D]);
 const endOfFile = Buffer.from([0x1A]);
@@ -9,7 +10,7 @@ const endOfFile = Buffer.from([0x1A]);
 describe('header parsing', () => {
   describe('insufficient header bytes', () => {
     it('no header should emit error', done => {
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(null);
 
       var stream = yadbf.stream();
@@ -29,7 +30,7 @@ describe('header parsing', () => {
       // there should be at least 32 header bytes
       const header = Buffer.alloc(31);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(null);
 
@@ -68,7 +69,7 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
@@ -94,7 +95,7 @@ describe('header parsing', () => {
       // set encryption flag
       header.writeUInt8(0, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
@@ -124,7 +125,7 @@ describe('header parsing', () => {
       // set encryption value
       header.writeUInt8(0x01, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
@@ -151,7 +152,7 @@ describe('header parsing', () => {
       // set unencrypted value
       header.writeUInt8(0x00, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
@@ -177,7 +178,7 @@ describe('header parsing', () => {
       // set invalid encryption value
       header.writeUInt8(0x02, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
@@ -217,7 +218,7 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
@@ -247,7 +248,7 @@ describe('header parsing', () => {
       // set unencrypted value
       header.writeUInt8(0x00, 15);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
@@ -277,7 +278,7 @@ describe('header parsing', () => {
     // set unencrypted value
     header.writeUInt8(0x00, 15);
 
-    const readableStream = new Duplex();
+    const readableStream = new Readable();
     readableStream.push(header);
     readableStream.push(Buffer.from([0x0C]));
     readableStream.push(endOfFile);
@@ -316,7 +317,7 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
@@ -354,7 +355,7 @@ describe('header parsing', () => {
       // language driver id/name
       header.writeUInt8(17, 29);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(endOfFile);
@@ -384,7 +385,7 @@ describe('header parsing', () => {
       // set invalid production MDX file existence value
       header.writeUInt8(0x02, 28);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(fieldDescriptorArrayTerminator);
       readableStream.push(null);
@@ -425,7 +426,7 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag, ERROR CONDITION: must be either 0x00 or 0x01
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -464,7 +465,7 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag, ERROR CONDITION: must be either 0x00 or 0x01
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -503,7 +504,7 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x02, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -542,7 +543,7 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -581,7 +582,7 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -620,7 +621,7 @@ describe('header parsing', () => {
       field.writeUInt16LE(1, 18); // work area id
       field.writeUInt8(0x00, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -679,7 +680,7 @@ describe('header parsing', () => {
       field2.writeUInt16LE(120, 18); // work area id
       field2.writeUInt8(0, 31); // prod MDX field flag
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(field2);
@@ -784,7 +785,7 @@ describe('record parsing', () => {
       record3.write('record 3 field 1 value', 1+0, 'record 3 field 1 value'.length);
       record3.write('record 3 field 2 value', 1+25, 'record 3 field 2 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(field2);
@@ -796,6 +797,7 @@ describe('record parsing', () => {
       readableStream.push(null);
 
       const records = [];
+      const records2 = [];
 
       var stream = yadbf.stream();
       readableStream.pipe(stream);
@@ -822,9 +824,29 @@ describe('record parsing', () => {
               field2: 'record 3 field 2 value'
             }
           ]);
+          assert.deepEqual(records2, [
+            {
+              '@meta': {
+                deleted: false
+              },
+              field1: 'record 1 field 1 value',
+              field2: 'record 1 field 2 value'
+            },
+            {
+              '@meta': {
+                deleted: false
+              },
+              field1: 'record 3 field 1 value',
+              field2: 'record 3 field 2 value'
+            }
+          ]);
 
           done();
-        });
+        })
+        .pipe( through2.obj( function( record, _, next ){
+          records2.push( record );
+          next();
+        }));
 
     });
 
@@ -856,7 +878,7 @@ describe('record parsing', () => {
       record1.write('#', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -906,7 +928,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -953,7 +975,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1001,7 +1023,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('  value   ', 1);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1052,7 +1074,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('19520719', 1, 8);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1115,7 +1137,7 @@ describe('record parsing', () => {
         record1.write(' ', 0);
         record1.write(truthy_value, 1);
 
-        const readableStream = new Duplex();
+        const readableStream = new Readable();
         readableStream.push(header);
         readableStream.push(field1);
         readableStream.push(fieldDescriptorArrayTerminator);
@@ -1165,7 +1187,7 @@ describe('record parsing', () => {
         record1.write(' ', 0);
         record1.write(falsey_value, 1);
 
-        const readableStream = new Duplex();
+        const readableStream = new Readable();
         readableStream.push(header);
         readableStream.push(field1);
         readableStream.push(fieldDescriptorArrayTerminator);
@@ -1214,7 +1236,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('?', 1);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1260,7 +1282,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('R', 1);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1310,7 +1332,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('123.45678', 1, '123.45678'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1357,7 +1379,7 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('123.45678', 1, '123.45678'.length);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1407,7 +1429,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('1357924680', 1, 10);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1467,7 +1489,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('          ', 1, 10);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
@@ -1527,7 +1549,7 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('     4    ', 1, 10);
 
-      const readableStream = new Duplex();
+      const readableStream = new Readable();
       readableStream.push(header);
       readableStream.push(field1);
       readableStream.push(fieldDescriptorArrayTerminator);
