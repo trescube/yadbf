@@ -1,6 +1,6 @@
 const assert = require('assert');
 const yadbf = require('..');
-const Duplex = require('stream').Duplex;
+const { Readable } = require('stream');
 const fs = require('fs');
 
 const fieldDescriptorArrayTerminator = Buffer.from([0x0D]);
@@ -724,25 +724,26 @@ describe('record parsing', () => {
       record3.write('record 3 field 1 value', 1+0, 'record 3 field 1 value'.length);
       record3.write('record 3 field 2 value', 1+25, 'record 3 field 2 value'.length);
 
-      const readableStream = new Duplex();
-      readableStream.push(header);
-      readableStream.push(field1);
-      readableStream.push(field2);
-      readableStream.push(fieldDescriptorArrayTerminator);
-      readableStream.push(record1);
-      readableStream.push(record2);
-      readableStream.push(record3);
-      readableStream.push(endOfFile);
-      readableStream.push(null);
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field1, 
+        field2, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        record2, 
+        record3, 
+        endOfFile
+      ]))
+      readableStream.push(null)
 
       const records = [];
 
-      yadbf(readableStream)
-        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
-        .on('record', record => {
-          records.push(record);
-        })
-        .on('end', () => {
+      readableStream.
+        pipe(yadbf()).
+        on('error', assert.fail.bind(null, 'no error events should have been emitted')).
+        on('data', record => records.push(record)).
+        on('end', () => {
           assert.deepEqual(records, [
             {
               '@meta': {
@@ -761,7 +762,8 @@ describe('record parsing', () => {
           ]);
 
           done();
-        });
+
+        })
 
     });
 
@@ -793,17 +795,18 @@ describe('record parsing', () => {
       record1.write('#', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
-      readableStream.push(header);
-      readableStream.push(field1);
-      readableStream.push(fieldDescriptorArrayTerminator);
-      readableStream.push(record1);
-      readableStream.push(Buffer.from([0x0A]));
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field1, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        Buffer.from([0x0A])
+      ]));
       readableStream.push(null);
 
-      const records = [];
-
-      yadbf(readableStream)
+      readableStream
+        .pipe(yadbf())
         .on('error', err => {
           assert.equal(err, 'Invalid deleted record value: #');
           done();
@@ -840,15 +843,19 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
-      readableStream.push(header);
-      readableStream.push(field1);
-      readableStream.push(fieldDescriptorArrayTerminator);
-      readableStream.push(record1);
-      readableStream.push(Buffer.from('Z'));
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header,
+        field1,
+        fieldDescriptorArrayTerminator,
+        record1,
+        Buffer.from('Z')
+      ]))
+
       readableStream.push(null);
 
-      yadbf(readableStream)
+      readableStream
+        .pipe(yadbf())
         .on('error', err => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
           done();
@@ -884,15 +891,18 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
-      const readableStream = new Duplex();
-      readableStream.push(header);
-      readableStream.push(field1);
-      readableStream.push(fieldDescriptorArrayTerminator);
-      readableStream.push(record1);
-      readableStream.push(Buffer.from([0x1B]));
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header,
+        field1,
+        fieldDescriptorArrayTerminator,
+        record1,
+        Buffer.from([0x1b])
+      ]))
       readableStream.push(null);
 
-      yadbf(readableStream)
+      readableStream
+        .pipe(yadbf())
         .on('error', err => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
           done();
@@ -929,26 +939,29 @@ describe('record parsing', () => {
       record1.write(' ', 0);
       record1.write('  value   ', 1);
 
-      const readableStream = new Duplex();
-      readableStream.push(header);
-      readableStream.push(field1);
-      readableStream.push(fieldDescriptorArrayTerminator);
-      readableStream.push(record1);
-      readableStream.push(Buffer.from([0x0A]));
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header,
+        field1,
+        fieldDescriptorArrayTerminator,
+        record1,
+        Buffer.from([0x1A])
+      ]));
       readableStream.push(null);
 
-      yadbf(readableStream)
+      readableStream
+        .pipe(yadbf())
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
-        .on('record', record => {
+        .on('data', record => {
           assert.equal(record.C_field, '  value');
-          done();
-        });
+        })
+        .on('end', done);
 
     });
 
   });
 
-  describe('D-type field parsing', () => {
+  describe.only('D-type field parsing', () => {
     it('D-type fields should be parsed as dates', done => {
       const header = Buffer.alloc(32);
       // valid version
@@ -977,33 +990,28 @@ describe('record parsing', () => {
       record1.write(' ', 0, 1);
       record1.write('19520719', 1, 8);
 
-      const readableStream = new Duplex();
-      readableStream.push(header);
-      readableStream.push(field1);
-      readableStream.push(fieldDescriptorArrayTerminator);
-      readableStream.push(record1);
-      readableStream.push(Buffer.from([0x1A]));
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header,
+        field1,
+        fieldDescriptorArrayTerminator,
+        record1,
+        Buffer.from([0x1A])
+      ]))
       readableStream.push(null);
 
-      const records = [];
-
-      yadbf(readableStream)
+      readableStream
+        .pipe(yadbf())
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
-        .on('record', record => {
-          records.push(record);
+        .on('data', record => {
+          assert.deepEqual(record, {
+            '@meta': {
+              deleted: false
+            },
+            field1: new Date(1952, 7, 19)
+          });
         })
-        .on('end', () => {
-          assert.deepEqual(records, [
-            {
-              '@meta': {
-                deleted: false
-              },
-              field1: new Date(1952, 7, 19)
-            }
-          ]);
-
-          done();
-        });
+        .on('end', done);
 
     });
 

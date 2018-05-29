@@ -1,4 +1,4 @@
-// http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
+const { Transform } = require('stream');
 
 // see: https://github.com/infused/dbf/blob/master/lib/dbf/table.rb
 const supportedVersions = [
@@ -15,130 +15,99 @@ const falseyValues = ['N', 'n', 'F', 'f'];
 // valid M-type value regex
 const validMTypeValueRegex = /^(\d{10}| {10})$/;
 
-function readHeader(source) {
-  const fileHeader = source.read(32);
+function parseHeaderField(fieldBytes, val, i) {
+  const field = fieldBytes.slice(i*32, i*32+32);
 
-  // bail if no header bytes could be read
-  if (!fileHeader) {
-    source.emit('error', 'Unable to parse first 32 bytes from header, found 0 byte(s)');
-    return;
+  const length = field.readUInt8(16);
+  if (length === 255) {
+    throw new Error('Field length must be less than 255');
   }
 
-  // bail if the database header could not be read
-  if (fileHeader.length !== 32) {
-    source.emit('error', `Unable to parse first 32 bytes from header, found ${fileHeader.length} byte(s)`);
-    return;
+  const type = field.toString('utf-8', 11, 12);
+  if (supportedFieldTypes.indexOf(type) === -1) {
+    throw new Error(`Field type must be one of: ${supportedFieldTypes.join(', ')}`);
   }
 
-  // if the version is not supported, emit an error
-  const versionByte = fileHeader.readUInt8(0);
+  // check types & lengths
+  if (type === 'D' && length !== 8) {
+    throw new Error(`Invalid D (date) field length: ${length}`);
+  }
+  if (type === 'L' && length !== 1) {
+    throw new Error(`Invalid L (logical) field length: ${length}`);
+  }
+  if (type === 'M' && length !== 10) {
+    throw new Error(`Invalid M (memo) field length: ${length}`);
+  }
+
+  const isIndexedInMDXFile = field.readUInt8(31);
+  if (isIndexedInMDXFile > 1) {
+    throw new Error(`Invalid indexed in production MDX file value: ${isIndexedInMDXFile}`);
+  }
+
+  return {
+    name: field.toString('utf-8', 0, 10).replace(/\0/g, ''),
+    type: type,
+    length: length,
+    precision: field.readUInt8(17),
+    workAreaId: field.readUInt16LE(18),
+    isIndexedInMDXFile: isIndexedInMDXFile === 1
+  };
+
+}
+
+function parseHeader(chunk) {
+  const versionByte = chunk.readUInt8(0);
   if (supportedVersions.indexOf(versionByte) === -1) {
-    source.emit('error', `Unsupported version: ${versionByte}`);
-    return;
+    throw new Error(`Unsupported version: ${versionByte}`)
   }
 
-  const numberOfHeaderBytes = fileHeader.readUInt16LE(8);
+  const numberOfHeaderBytes = chunk.readUInt16LE(8);
   // the number of header bytes should be 1 when modded with 32
   if (numberOfHeaderBytes % 32 !== 1) {
-    source.emit('error', `Invalid number of header bytes: ${numberOfHeaderBytes}`);
-    return;
+    throw new Error(`Invalid number of header bytes: ${numberOfHeaderBytes}`);
   }
 
-  const fieldBytes = source.read(numberOfHeaderBytes-32);
+  const fieldBytes = chunk.slice(32, numberOfHeaderBytes);
   // emit an error if the header bytes does not end with 0x0D (per spec)
   if (fieldBytes.readUInt8(numberOfHeaderBytes-32-1) !== 0x0D) {
-    source.emit('error', `Invalid field descriptor array terminator at byte ${numberOfHeaderBytes}`);
-    return;
+    throw new Error(`Invalid field descriptor array terminator at byte ${numberOfHeaderBytes}`);
   }
 
-  const encryptionByte = fileHeader.readUInt8(15);
+  const encryptionByte = chunk.readUInt8(15);
   // if the source is encrypted, then emit an error
   if (encryptionByte === 1) {
-    source.emit('error', 'Encryption flag is set, cannot process');
-    return;
+    throw new Error('Encryption flag is set, cannot process');
   }
   // valid values for the encryption byte are 0x00 and 0x01, emit an error otherwise
   if (encryptionByte > 1) {
-    source.emit('error', `Invalid encryption flag value: ${encryptionByte}`);
-    return;
+    throw new Error(`Invalid encryption flag value: ${encryptionByte}`);
   }
 
-  const hasProductionMDXFile = fileHeader.readUInt8(28);
+  const hasProductionMDXFile = chunk.readUInt8(28);
   // production MDX file existence value must be 0x01 or 0x02 (per spec)
   if (hasProductionMDXFile > 1) {
-    source.emit('error', `Invalid production MDX file existence value: ${hasProductionMDXFile}`);
-    return;
+    throw new Error(`Invalid production MDX file existence value: ${hasProductionMDXFile}`);
   }
 
-  const header = {
-    version: versionByte,
-    dateOfLastUpdate: new Date(
-      1900 + fileHeader.readUInt8(1),
-      fileHeader.readUInt8(2) - 1,
-      fileHeader.readUInt8(3)
-    ),
-    numberOfRecords: fileHeader.readInt32LE(4),
-    numberOfHeaderBytes: numberOfHeaderBytes,
-    numberOfBytesInRecord: fileHeader.readInt16LE(10),
-    hasProductionMDXFile: hasProductionMDXFile,
-    langaugeDriverId: fileHeader.readUInt8(29),
-    fields: []
-  };
-
-  // there are m bytes for field definitions, where
-  // m = number of header bytes - 32 (base header) - 1 (field descriptor array terminator)
-  // m should be divisible by 32 since each field is described in exactly 32 bytes
   const numberOfFields = (fieldBytes.length-1)/32;
 
-  for (let i = 0; i < numberOfFields; i+=1) {
-    const field = fieldBytes.slice(i*32, i*32+32);
+  // construct and return the header
+  return {
+    version: versionByte,
+    dateOfLastUpdate: new Date(
+      1900 + chunk.readUInt8(1),
+      chunk.readUInt8(2) - 1,
+      chunk.readUInt8(3)
+    ),
+    numberOfRecords: chunk.readInt32LE(4),
+    numberOfHeaderBytes: numberOfHeaderBytes,
+    numberOfBytesInRecord: chunk.readInt16LE(10),
+    hasProductionMDXFile: hasProductionMDXFile,
+    langaugeDriverId: chunk.readUInt8(29),
+    fields: Array.from( {length: numberOfFields }, parseHeaderField.bind(null, fieldBytes))
+  };
 
-    const length = field.readUInt8(16);
-    if (length === 255) {
-      source.emit('error', 'Field length must be less than 255');
-      return;
-    }
-
-    const type = field.toString('utf-8', 11, 12);
-    if (supportedFieldTypes.indexOf(type) === -1) {
-      source.emit('error', `Field type must be one of: ${supportedFieldTypes.join(', ')}`);
-      return;
-    }
-
-    // check types & lengths
-    if (type === 'D' && length !== 8) {
-      source.emit('error', `Invalid D (date) field length: ${length}`);
-      return;
-    }
-    if (type === 'L' && length !== 1) {
-      source.emit('error', `Invalid L (logical) field length: ${length}`);
-      return;
-    }
-    if (type === 'M' && length !== 10) {
-      source.emit('error', `Invalid M (memo) field length: ${length}`);
-      return;
-    }
-
-    const isIndexedInMDXFile = field.readUInt8(31);
-    if (isIndexedInMDXFile > 1) {
-      source.emit('error', `Invalid indexed in production MDX file value: ${isIndexedInMDXFile}`);
-      return;
-    }
-
-    header.fields.push({
-      name: field.toString('utf-8', 0, 10).replace(/\0/g, ''),
-      type: type,
-      length: length,
-      precision: field.readUInt8(17),
-      workAreaId: field.readUInt16LE(18),
-      isIndexedInMDXFile: isIndexedInMDXFile === 1
-    });
-
-  }
-
-  return header;
-
-};
+}
 
 function convertToObject(header, chunk) {
   const record = {
@@ -209,45 +178,75 @@ function isDeleted(chunk) {
 
 }
 
-module.exports = (source, options) => {
-  let header;
-
-  // read the header first, only emitting if successfully parsed
-  source.once('readable', () => {
-    header = readHeader(source);
-    if (header) {
-      source.emit('header', header);
-    }
-  });
-
-  // register a handler for all subsequent events
-  source.on('readable', () => {
-    let chunk;
-
-    while (null !== (chunk = source.read(header.numberOfBytesInRecord))) {
-      // console.error(`read ${chunk.length} bytes`);
-      // console.error(`chunk: ${chunk}`);
+module.exports = (options) => new Transform({
+  readableObjectMode: true,
+  transform(chunk, encoding, callback) {
+    // if the header hasn't been parsed yet, do so now and emit it
+    if (!this.header) {
       try {
-        if (chunk.length === header.numberOfBytesInRecord) {
-          if (!isDeleted(chunk)) {
-            source.emit('record', convertToObject(header, chunk));
-          }
-        } else if ( chunk.length === 1 && chunk.readUInt8(0) === 0x1A) {
-          // check for 0x1A (end-of-file marker) when there's a single byte read
-          source.emit('close');
-        } else {
-          source.emit('error', 'Last byte of file is not end-of-file marker');
+        this.header = parseHeader(chunk)
+ 
+        // emit the header for outside consumption
+        this.emit('header', this.header)
+
+        // remove the header bytes from the beginning of the chunk (for easier bookkeeping)
+        chunk = chunk.slice(this.header.numberOfHeaderBytes)
+
+        // keep track of how many records have been made readable
+        this.numberOfRecordsPushed = 0
+
+      } catch (err) {
+        this.emit('error', err.toString());
+      }
+    }
+
+    // if there were leftover bytes from the previous chunk, prepend them to the current chunk
+    if (this.leftoverBytes) {
+      chunk = Buffer.concat( [this.leftoverBytes, chunk], this.leftoverBytes.length + chunk.length )
+      delete this.leftoverBytes
+    }
+
+    // calculate the number of records available in this chunk
+    // there will most likely be a fragment of the next record at the end, so floor it
+    const numberOfRecordsInThisChunk = Math.floor(chunk.length / this.header.numberOfBytesInRecord)
+
+    // slice up the chunk into record-size bites, then iterate and push
+    Array.from({length: numberOfRecordsInThisChunk}, (val, i) => chunk.slice(
+        i * this.header.numberOfBytesInRecord, 
+        i * this.header.numberOfBytesInRecord + this.header.numberOfBytesInRecord)
+    ).forEach(chunk => {
+      try {
+        const record = convertToObject(this.header, chunk);
+
+        // don't push deleted records (yet)
+        if (!record['@meta'].deleted) {
+          this.push(record);
         }
 
+      } catch (err) {
+        this.emit('error', err.toString());
       }
-      catch (err) {
-        source.emit('error', err.toString());
+    })
+
+    // increment total number of records pushed by the number pushed in this chunk
+    this.numberOfRecordsPushed += numberOfRecordsInThisChunk
+
+    // anything leftover after all the records in this chunk should be saved off til the next iteration
+    this.leftoverBytes = chunk.slice(this.header.numberOfBytesInRecord * numberOfRecordsInThisChunk)
+
+    // if all the records have been emitted, proceed with shutdown
+    if (this.numberOfRecordsPushed === this.header.numberOfRecords && 
+        this.leftoverBytes.length === 1) {
+      // throw an error if the last byte isn't the expected EOF marker
+      if (this.leftoverBytes.readUInt8(0) !== 0x1A) {
+        this.emit('error', 'Last byte of file is not end-of-file marker');
       }
 
+      // otherwise clear up leftoverBytes and signal end-of-stream
+      delete this.leftoverBytes
+      this.push(null)
     }
 
-  });
-
-  return source;
-
-};
+    callback();
+  }
+})
