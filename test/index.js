@@ -1,7 +1,6 @@
 const assert = require('assert');
 const yadbf = require('..');
 const { Readable } = require('stream');
-const fs = require('fs');
 
 const fieldDescriptorArrayTerminator = Buffer.from([0x0D]);
 const endOfFile = Buffer.from([0x1A]);
