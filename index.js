@@ -1,16 +1,16 @@
 const { Transform } = require('stream');
 
 // see: https://github.com/infused/dbf/blob/master/lib/dbf/table.rb
-const supportedVersions = [
+const supportedVersions = new Set([
   0x03, // FoxBASE+/Dbase III plus, no memo
   0x83, // FoxBASE+/dBASE III PLUS, with memo
   0xF5, // FoxPro 2.x (or earlier) with memo
   0x8B, // dBASE IV with memo
   0x8E  // ?
-];
-const supportedFieldTypes = ['C', 'D', 'F', 'L', 'M', 'N'];
-const truthyValues = ['Y', 'y', 'T', 't'];
-const falseyValues = ['N', 'n', 'F', 'f'];
+]);
+const supportedFieldTypes = new Set(['C', 'D', 'F', 'L', 'M', 'N']);
+const truthyValues = new Set(['Y', 'y', 'T', 't']);
+const falseyValues = new Set(['N', 'n', 'F', 'f']);
 
 // valid M-type value regex
 const validMTypeValueRegex = /^(\d{10}| {10})$/;
@@ -24,8 +24,8 @@ function parseHeaderField(fieldBytes, val, i) {
   }
 
   const type = field.toString('utf-8', 11, 12);
-  if (supportedFieldTypes.indexOf(type) === -1) {
-    throw new Error(`Field type must be one of: ${supportedFieldTypes.join(', ')}`);
+  if (!supportedFieldTypes.has(type)) {
+    throw new Error(`Field type must be one of: ${Array.from(supportedFieldTypes).join(', ')}`);
   }
 
   // check types & lengths
@@ -57,8 +57,8 @@ function parseHeaderField(fieldBytes, val, i) {
 
 function parseHeader(chunk) {
   const versionByte = chunk.readUInt8(0);
-  if (supportedVersions.indexOf(versionByte) === -1) {
-    throw new Error(`Unsupported version: ${versionByte}`)
+  if (!supportedVersions.has(versionByte)) {
+    throw new Error(`Unsupported version: ${versionByte}`);
   }
 
   const numberOfHeaderBytes = chunk.readUInt16LE(8);
@@ -132,9 +132,9 @@ function convertToObject(header, chunk) {
 
     }
     else if (field.type === 'L') {
-      if (truthyValues.indexOf(value) >= 0) {
+      if (truthyValues.has(value)) {
         record[field.name] = true;
-      } else if (falseyValues.indexOf(value) >= 0) {
+      } else if (falseyValues.has(value)) {
         record[field.name] = false;
       } else if (value !== '?') {
         throw `Invalid L-type field value: ${value}`;
@@ -178,37 +178,66 @@ function isDeleted(chunk) {
 
 }
 
+function hasEnoughBytesForHeader(chunk) {
+
+}
+
 module.exports = (options) => new Transform({
   readableObjectMode: true,
+  final(callback) {
+    if (!this.header) {
+      const numberOfBytes = this.leftoverBytes ? this.leftoverBytes.length : 0;
+
+      // this.emit('error', );
+      this.destroy(`Unable to parse first 32 bytes from header, found ${numberOfBytes} byte(s)`);
+    }
+  },
   transform(chunk, encoding, callback) {
     // if the header hasn't been parsed yet, do so now and emit it
     if (!this.header) {
+      if (this.leftoverBytes) {
+        chunk = Buffer.concat([this.leftoverBytes, chunk]);
+        delete this.leftoverBytes;
+      }
+
+      // if 
+      if (chunk.length < 32) {
+        this.leftoverBytes = chunk;
+        return callback();
+      }
+
+      if (chunk.length < chunk.readUInt16LE(8)) {
+        this.leftoverBytes = chunk;
+        return callback();
+      }
+
       try {
-        this.header = parseHeader(chunk)
+        this.header = parseHeader(chunk);
  
         // emit the header for outside consumption
-        this.emit('header', this.header)
+        this.emit('header', this.header);
 
         // remove the header bytes from the beginning of the chunk (for easier bookkeeping)
-        chunk = chunk.slice(this.header.numberOfHeaderBytes)
+        chunk = chunk.slice(this.header.numberOfHeaderBytes);
 
         // keep track of how many records have been made readable
-        this.numberOfRecordsPushed = 0
+        this.numberOfRecordsPushed = 0;
 
       } catch (err) {
-        this.emit('error', err.toString());
+        this.destroy(err);
+        return;
       }
     }
 
     // if there were leftover bytes from the previous chunk, prepend them to the current chunk
     if (this.leftoverBytes) {
-      chunk = Buffer.concat( [this.leftoverBytes, chunk], this.leftoverBytes.length + chunk.length )
-      delete this.leftoverBytes
+      chunk = Buffer.concat( [this.leftoverBytes, chunk], this.leftoverBytes.length + chunk.length );
+      delete this.leftoverBytes;
     }
 
     // calculate the number of records available in this chunk
     // there will most likely be a fragment of the next record at the end, so floor it
-    const numberOfRecordsInThisChunk = Math.floor(chunk.length / this.header.numberOfBytesInRecord)
+    const numberOfRecordsInThisChunk = Math.floor(chunk.length / this.header.numberOfBytesInRecord);
 
     // slice up the chunk into record-size bites, then iterate and push
     Array.from({length: numberOfRecordsInThisChunk}, (val, i) => chunk.slice(
@@ -224,29 +253,29 @@ module.exports = (options) => new Transform({
         }
 
       } catch (err) {
-        this.emit('error', err.toString());
+        this.destroy(err);
       }
-    })
+    });
 
     // increment total number of records pushed by the number pushed in this chunk
-    this.numberOfRecordsPushed += numberOfRecordsInThisChunk
+    this.numberOfRecordsPushed += numberOfRecordsInThisChunk;
 
     // anything leftover after all the records in this chunk should be saved off til the next iteration
-    this.leftoverBytes = chunk.slice(this.header.numberOfBytesInRecord * numberOfRecordsInThisChunk)
+    this.leftoverBytes = chunk.slice(this.header.numberOfBytesInRecord * numberOfRecordsInThisChunk);
 
     // if all the records have been emitted, proceed with shutdown
     if (this.numberOfRecordsPushed === this.header.numberOfRecords && 
         this.leftoverBytes.length === 1) {
       // throw an error if the last byte isn't the expected EOF marker
       if (this.leftoverBytes.readUInt8(0) !== 0x1A) {
-        this.emit('error', 'Last byte of file is not end-of-file marker');
+        this.destroy('Last byte of file is not end-of-file marker');
       }
 
       // otherwise clear up leftoverBytes and signal end-of-stream
-      delete this.leftoverBytes
-      this.push(null)
+      delete this.leftoverBytes;
+      this.push(null);
     }
 
     callback();
   }
-})
+});
