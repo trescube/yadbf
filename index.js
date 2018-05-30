@@ -179,7 +179,7 @@ function isDeleted(chunk) {
 }
 
 function hasEnoughBytesForHeader(chunk) {
-
+  return chunk.length < 32 || chunk.length < chunk.readUInt16LE(8)
 }
 
 module.exports = (options) => new Transform({
@@ -188,7 +188,6 @@ module.exports = (options) => new Transform({
     if (!this.header) {
       const numberOfBytes = this.leftoverBytes ? this.leftoverBytes.length : 0;
 
-      // this.emit('error', );
       this.destroy(`Unable to parse first 32 bytes from header, found ${numberOfBytes} byte(s)`);
     }
   },
@@ -200,13 +199,9 @@ module.exports = (options) => new Transform({
         delete this.leftoverBytes;
       }
 
-      // if 
-      if (chunk.length < 32) {
-        this.leftoverBytes = chunk;
-        return callback();
-      }
-
-      if (chunk.length < chunk.readUInt16LE(8)) {
+      // if there aren't enough bytes to read the header, save off the accumulated
+      //  bytes for later use
+      if (hasEnoughBytesForHeader(chunk)) {
         this.leftoverBytes = chunk;
         return callback();
       }
