@@ -5,9 +5,8 @@
   "main": "index.js",
   "scripts": {
     "lint": "eslint .",
-    "travis": "npm test",
-    "test": "mocha",
-    "validate": "npm ls"
+    "travis": "yarn test",
+    "test": "mocha"
   },
   "keywords": [
     "DBF"
@@ -20,7 +19,6 @@
   },
   "pre-commit": [
     "lint",
-    "validate",
     "test"
   ],
   "eslintConfig": {
