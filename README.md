@@ -7,7 +7,7 @@ This project is a streaming DBF parser that throws errors for the slightest tran
 
 ## Requirements
 
-Node.js 6 or higher is required.
+Node.js 8 or higher is required.
 
 ## Installation
 
