@@ -11,10 +11,10 @@ Node.js 8 or higher is required.
 
 ## Installation
 
-Using npm:
+Using yarn:
 
 ```bash
-$ npm i --save yadbf
+$ yarn add --save yadbf
 ```
 
 In Node.js:
@@ -23,20 +23,20 @@ In Node.js:
 const yadbf = require('yadbf');
 const fs = require('fs');
 
-yadbf(fs.createReadStream('file.dbf'))
-  .on('error', err => {
-    console.error(`an error was thrown: ${err}`);
-  })
+fs.createReadStream('file.dbf')
+  .pipe(yadbf())
   .on('header', header => {
     console.log(`header: ${JSON.stringify(header, null, 2)}`);
   })
-  .on('record', record => {
+  .on('data', record => {
     console.log(`record: ${JSON.stringify(record, null, 2)}`);
   })
   .on('end', () => {
-    console.log'Done!');
+    console.log('Done!');
+  })
+  .on('error', err => {
+    console.error(`an error was thrown: ${err}`);
   });
-
 ```
 
 ## Options
