@@ -152,14 +152,17 @@ describe('header parsing', () => {
       // set valid version
       header.writeUInt8(0x03, 0);
       // set valid number of header bytes
-      header.writeInt16LE(33, 8);
+      header.writeUInt32LE(0, 4);
+      header.writeInt16LE(32+1, 8);
+      header.writeUInt16LE(17, 10);
       // set unencrypted value
       header.writeUInt8(0x00, 15);
 
       const readableStream = new Readable();
       readableStream.push(Buffer.concat([
         header, 
-        fieldDescriptorArrayTerminator
+        fieldDescriptorArrayTerminator,
+        endOfFile
       ]));
       readableStream.push(null);
 
@@ -167,7 +170,7 @@ describe('header parsing', () => {
         .pipe(yadbf())
         .on('error', assert.fail.bind(null, 'no error event should have been emitted'))
         .on('header', actualHeader => {
-          assert.pass('header should have been emitted');
+          assert.ok('header should have been emitted');
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
@@ -855,7 +858,7 @@ describe('record parsing', () => {
       field.writeUInt8(1, 31); // prod MDX field flag
 
       // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+25+30);
+      const record = Buffer.alloc(1+25);
       record.write('#', 0, 1);
       record.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
 
@@ -871,6 +874,7 @@ describe('record parsing', () => {
 
       readableStream
         .pipe(yadbf())
+        .on('header', header => assert.ok('header should have been emitted'))
         .on('error', err => {
           assert.equal(err, 'Invalid deleted record value: #');
         })
@@ -920,8 +924,8 @@ describe('record parsing', () => {
 
       readableStream
         .pipe(yadbf())
-        .on('header', header => assert.pass('header was emitted'))
-        .on('data', record => assert.pass('record was emitted'))
+        .on('header', header => assert.ok('header was emitted'))
+        .on('data', record => assert.ok('record was emitted'))
         .on('error', err => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
         })
