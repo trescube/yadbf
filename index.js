@@ -67,6 +67,9 @@ function parseHeader(chunk) {
     throw new Error(`Invalid number of header bytes: ${numberOfHeaderBytes}`);
   }
 
+  // there are 32 bytes per header field + 1 byte for terminator + 32 bytes for the initial header
+  const numberOfFields = (numberOfHeaderBytes-32-1)/32;
+
   const fieldBytes = chunk.slice(32, numberOfHeaderBytes);
   // emit an error if the header bytes does not end with 0x0D (per spec)
   if (fieldBytes.readUInt8(numberOfHeaderBytes-32-1) !== 0x0D) {
@@ -88,8 +91,6 @@ function parseHeader(chunk) {
   if (hasProductionMDXFile > 1) {
     throw new Error(`Invalid production MDX file existence value: ${hasProductionMDXFile}`);
   }
-
-  const numberOfFields = (fieldBytes.length-1)/32;
 
   // construct and return the header
   return {
