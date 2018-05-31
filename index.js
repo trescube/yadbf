@@ -191,6 +191,8 @@ module.exports = (options) => new Transform({
 
       this.destroy(`Unable to parse first 32 bytes from header, found ${numberOfBytes} byte(s)`);
     }
+
+    return callback();
   },
   transform(chunk, encoding, callback) {
     // if the header hasn't been parsed yet, do so now and emit it
@@ -221,7 +223,7 @@ module.exports = (options) => new Transform({
 
       } catch (err) {
         this.destroy(err);
-        return;
+        return callback();
       }
     }
 
