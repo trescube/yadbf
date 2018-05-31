@@ -1,18 +1,31 @@
 {
   "name": "yadbf",
   "version": "2.0.0",
-  "description": "",
+  "description": "An error-throwing DBF/dbase parsing transform stream",
+  "homepage": "https://github.com/trescube/yadbf#readme",
+  "author": "Stephen Hess",
+  "license": "MIT",
   "main": "index.js",
+  "engines": {
+    "node": ">=8.0.0"
+  },
   "scripts": {
     "lint": "eslint .",
     "travis": "yarn test",
     "test": "mocha"
   },
   "keywords": [
-    "DBF"
+    "DBF",
+    "dbase"
   ],
-  "author": "Stephen Hess",
-  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/trescube/yadbf/issues",
+    "email": "stephen.k.hess@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trescube/yadbf.git"
+  },
   "devDependencies": {
     "eslint": "^4.19.1",
     "mocha": "^5.2.0"
