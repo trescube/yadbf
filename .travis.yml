@@ -8,3 +8,4 @@ node_js:
 matrix:
   fast_finish: true
 script: yarn run travis
+after_success: yarn run coverage
