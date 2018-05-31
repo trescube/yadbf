@@ -1528,3 +1528,107 @@ describe('record parsing', () => {
   });
 
 });
+
+describe('options', () => {
+  describe('deleted flag', () => {
+    it('deleted=true should include deleted records', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(3, 4);
+      header.writeUInt16LE(32+32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field, 30 bytes 2nd field
+      header.writeUInt16LE(1+25+30, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('field1', 0, 'field1'.length);
+      field1.write('C', 11);
+      field1.writeUInt8(25, 16); // length
+      field1.writeUInt8(104, 17); // precision
+      field1.writeUInt16LE(119, 18); // work area id
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // second field definition
+      const field2 = Buffer.alloc(32);
+      field2.write('field2', 0, 'field2'.length);
+      field2.write('C', 11);
+      field2.writeUInt8(30, 16); // length
+      field2.writeUInt8(12, 17); // precision
+      field2.writeUInt16LE(120, 18); // work area id
+      field2.writeUInt8(0, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+25+30);
+      record1.write(' ', 0, 1);
+      record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
+      record1.write('record 1 field 2 value', 1+25, 'record 1 field 2 value'.length);
+
+      // second record, deleted, # of bytes per record in length
+      const record2 = Buffer.alloc(1+25+30);
+      record2.write('*', 0, 1);
+      record2.write('record 2 field 1 value', 1+0, 'record 2 field 1 value'.length);
+      record2.write('record 2 field 2 value', 1+25, 'record 2 field 2 value'.length);
+
+      // third record, # of bytes per record in length
+      const record3 = Buffer.alloc(1+25+30);
+      record3.write(' ', 0, 1);
+      record3.write('record 3 field 1 value', 1+0, 'record 3 field 1 value'.length);
+      record3.write('record 3 field 2 value', 1+25, 'record 3 field 2 value'.length);
+
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field1, 
+        field2, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        record2, 
+        record3, 
+        endOfFile
+      ]));
+      readableStream.push(null);
+
+      const records = [
+        {
+          '@meta': {
+            deleted: false
+          },
+          field1: 'record 1 field 1 value',
+          field2: 'record 1 field 2 value'
+        },
+        {
+          '@meta': {
+            deleted: true
+          },
+          field1: 'record 2 field 1 value',
+          field2: 'record 2 field 2 value'
+        },
+        {
+          '@meta': {
+            deleted: false
+          },
+          field1: 'record 3 field 1 value',
+          field2: 'record 3 field 2 value'
+        }      
+      ];
+
+      readableStream
+        .pipe(yadbf({ deleted: true }))
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', record => assert.deepEqual(record, records.shift()))
+        .on('end', () => {
+          assert.equal(records.length, 0);
+          done(); 
+        });
+    });
+
+  });
+
+
+});

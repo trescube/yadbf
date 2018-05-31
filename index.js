@@ -183,97 +183,104 @@ function hasEnoughBytesForHeader(chunk) {
   return chunk.length < 32 || chunk.length < chunk.readUInt16LE(8);
 }
 
-module.exports = (options) => new Transform({
-  readableObjectMode: true,
-  final(callback) {
-    if (!this.header) {
-      const numberOfBytes = this.unconsumedBytes ? this.unconsumedBytes.length : 0;
+// helper function that returns true iff deleted is true
+const deletedRecordsShouldBeIncluded = (deleted) => deleted === true
 
-      this.destroy(`Unable to parse first 32 bytes from header, found ${numberOfBytes} byte(s)`);
-    }
+module.exports = (options = {}) => {
+  const includeDeleted = deletedRecordsShouldBeIncluded(options.deleted);
 
-    return callback();
-  },
-  transform(chunk, encoding, callback) {
-    // if the header hasn't been parsed yet, do so now and emit it
-    if (!this.header) {
+  return new Transform({
+    readableObjectMode: true,
+    final(callback) {
+      if (!this.header) {
+        const numberOfBytes = this.unconsumedBytes ? this.unconsumedBytes.length : 0;
+
+        this.destroy(`Unable to parse first 32 bytes from header, found ${numberOfBytes} byte(s)`);
+      }
+
+      return callback();
+    },
+    transform(chunk, encoding, callback) {
+      // if the header hasn't been parsed yet, do so now and emit it
+      if (!this.header) {
+        if (this.unconsumedBytes) {
+          chunk = Buffer.concat([this.unconsumedBytes, chunk]);
+          delete this.unconsumedBytes;
+        }
+
+        // if there aren't enough bytes to read the header, save off the accumulated
+        //  bytes for later use
+        if (hasEnoughBytesForHeader(chunk)) {
+          this.unconsumedBytes = chunk;
+          return callback();
+        }
+
+        try {
+          this.header = parseHeader(chunk);
+   
+          // emit the header for outside consumption
+          this.emit('header', this.header);
+
+          // remove the header bytes from the beginning of the chunk (for easier bookkeeping)
+          chunk = chunk.slice(this.header.numberOfHeaderBytes);
+
+          // keep track of how many records have been made readable
+          this.numberOfRecordsPushed = 0;
+
+        } catch (err) {
+          this.destroy(err);
+          return callback();
+        }
+      }
+
+      // if there were leftover bytes from the previous chunk, prepend them to the current chunk
       if (this.unconsumedBytes) {
-        chunk = Buffer.concat([this.unconsumedBytes, chunk]);
+        chunk = Buffer.concat( [this.unconsumedBytes, chunk], this.unconsumedBytes.length + chunk.length );
         delete this.unconsumedBytes;
       }
 
-      // if there aren't enough bytes to read the header, save off the accumulated
-      //  bytes for later use
-      if (hasEnoughBytesForHeader(chunk)) {
-        this.unconsumedBytes = chunk;
-        return callback();
-      }
+      // calculate the number of records available in this chunk
+      // there will most likely be a fragment of the next record at the end, so floor it
+      const numberOfRecordsInThisChunk = Math.floor(chunk.length / this.header.numberOfBytesInRecord);
 
-      try {
-        this.header = parseHeader(chunk);
- 
-        // emit the header for outside consumption
-        this.emit('header', this.header);
+      // slice up the chunk into record-size bites, then iterate and push
+      Array.from({length: numberOfRecordsInThisChunk}, (val, i) => chunk.slice(
+          i * this.header.numberOfBytesInRecord, 
+          i * this.header.numberOfBytesInRecord + this.header.numberOfBytesInRecord)
+      ).forEach(chunk => {
+        try {
+          const record = convertToObject(this.header, chunk);
 
-        // remove the header bytes from the beginning of the chunk (for easier bookkeeping)
-        chunk = chunk.slice(this.header.numberOfHeaderBytes);
+          // don't push deleted records (yet)
+          if (!record['@meta'].deleted || includeDeleted) {
+            this.push(record);
+          }
 
-        // keep track of how many records have been made readable
-        this.numberOfRecordsPushed = 0;
+        } catch (err) {
+          this.destroy(err);
+        }
+      });
 
-      } catch (err) {
-        this.destroy(err);
-        return callback();
-      }
-    }
+      // increment total number of records pushed by the number pushed in this chunk
+      this.numberOfRecordsPushed += numberOfRecordsInThisChunk;
 
-    // if there were leftover bytes from the previous chunk, prepend them to the current chunk
-    if (this.unconsumedBytes) {
-      chunk = Buffer.concat( [this.unconsumedBytes, chunk], this.unconsumedBytes.length + chunk.length );
-      delete this.unconsumedBytes;
-    }
+      // anything leftover after all the records in this chunk should be saved off til the next iteration
+      this.unconsumedBytes = chunk.slice(this.header.numberOfBytesInRecord * numberOfRecordsInThisChunk);
 
-    // calculate the number of records available in this chunk
-    // there will most likely be a fragment of the next record at the end, so floor it
-    const numberOfRecordsInThisChunk = Math.floor(chunk.length / this.header.numberOfBytesInRecord);
-
-    // slice up the chunk into record-size bites, then iterate and push
-    Array.from({length: numberOfRecordsInThisChunk}, (val, i) => chunk.slice(
-        i * this.header.numberOfBytesInRecord, 
-        i * this.header.numberOfBytesInRecord + this.header.numberOfBytesInRecord)
-    ).forEach(chunk => {
-      try {
-        const record = convertToObject(this.header, chunk);
-
-        // don't push deleted records (yet)
-        if (!record['@meta'].deleted) {
-          this.push(record);
+      // if all the records have been emitted, proceed with shutdown
+      if (this.numberOfRecordsPushed === this.header.numberOfRecords && 
+          this.unconsumedBytes.length === 1) {
+        // throw an error if the last byte isn't the expected EOF marker
+        if (this.unconsumedBytes.readUInt8(0) !== 0x1A) {
+          this.destroy('Last byte of file is not end-of-file marker');
         }
 
-      } catch (err) {
-        this.destroy(err);
-      }
-    });
-
-    // increment total number of records pushed by the number pushed in this chunk
-    this.numberOfRecordsPushed += numberOfRecordsInThisChunk;
-
-    // anything leftover after all the records in this chunk should be saved off til the next iteration
-    this.unconsumedBytes = chunk.slice(this.header.numberOfBytesInRecord * numberOfRecordsInThisChunk);
-
-    // if all the records have been emitted, proceed with shutdown
-    if (this.numberOfRecordsPushed === this.header.numberOfRecords && 
-        this.unconsumedBytes.length === 1) {
-      // throw an error if the last byte isn't the expected EOF marker
-      if (this.unconsumedBytes.readUInt8(0) !== 0x1A) {
-        this.destroy('Last byte of file is not end-of-file marker');
+        // otherwise clear up unconsumedBytes and signal end-of-stream
+        delete this.unconsumedBytes;
+        this.push(null);
       }
 
-      // otherwise clear up unconsumedBytes and signal end-of-stream
-      delete this.unconsumedBytes;
-      this.push(null);
+      callback();
     }
-
-    callback();
-  }
-});
+  });
+}

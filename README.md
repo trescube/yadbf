@@ -42,4 +42,8 @@ fs.createReadStream('file.dbf')
 
 ## Options
 
-While the second parameter is accepted, it is not currently used and should be considered reserved for the glorious future.  
+The following options are available and can be passed in a single object parameter: 
+
+| Name | Type | Description | Default |
+| --- | --- | --- | --- |
+| `deleted` | boolean | records flagged as deleted should be returned, non-boolean value is treated as "not supplied" | `false` |
