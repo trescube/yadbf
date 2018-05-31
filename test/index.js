@@ -648,6 +648,72 @@ describe('header parsing', () => {
 
     });
 
+    it('duplicate field name should emit error', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // year/month/day
+      header.writeUInt8(97, 1);
+      header.writeUInt8(6, 2);
+      header.writeUInt8(25, 3);
+      // # of records, # of header bytes, # of bytes per record
+      header.writeUInt32LE(0, 4);
+      header.writeUInt16LE(32+32+32+32+1, 8);
+      header.writeUInt16LE(37, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+      // language driver id/name
+      header.writeUInt8(17, 29);
+
+      // first field definition
+      const field1 = Buffer.alloc(32);
+      field1.write('field1', 0, 'field1'.length);
+      field1.write('C', 11);
+      field1.writeUInt8(157, 16); // length
+      field1.writeUInt8(104, 17); // precision
+      field1.writeUInt16LE(119, 18); // work area id
+      field1.writeUInt8(1, 31); // prod MDX field flag
+
+      // second field definition
+      const field2 = Buffer.alloc(32);
+      field2.write('field2', 0, 'field2'.length);
+      field2.write('C', 11);
+      field2.writeUInt8(13, 16); // length
+      field2.writeUInt8(12, 17); // precision
+      field2.writeUInt16LE(120, 18); // work area id
+      field2.writeUInt8(0, 31); // prod MDX field flag
+
+      // third field definition (different type but same name as field1)
+      const field3 = Buffer.alloc(32);
+      field3.write('field1', 0, 'field1'.length);
+      field3.write('L', 11);
+      field3.writeUInt8(1, 16); // length
+      field3.writeUInt8(1, 31); // prod MDX field flag
+
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header,
+        field1,
+        field2,
+        field3, // this is the duplicate
+        fieldDescriptorArrayTerminator,
+        endOfFile
+      ]));
+      readableStream.push(null);
+
+      readableStream
+        .pipe(yadbf())
+        .on('error', err => {
+          assert.equal(err, 'Error: Duplicate field name \'field1\'');
+        })
+        .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
+        .on('end', done);
+
+    });
+
   });
 
   describe('successful parsing', () => {
