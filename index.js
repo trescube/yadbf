@@ -93,7 +93,7 @@ function parseHeader(chunk) {
   }
 
   // construct and return the header
-  return {
+  const header = {
     version: versionByte,
     dateOfLastUpdate: new Date(
       1900 + chunk.readUInt8(1),
@@ -107,6 +107,16 @@ function parseHeader(chunk) {
     langaugeDriverId: chunk.readUInt8(29),
     fields: Array.from( {length: numberOfFields }, parseHeaderField.bind(null, fieldBytes))
   };
+
+  // if there are any duplicate field names, throw an error
+  header.fields.reduce((allFieldNames, field) => {
+    if (allFieldNames.has(field.name)) {
+      throw new Error(`Duplicate field name '${field.name}'`)
+    } 
+    return allFieldNames.add(field.name)
+  }, new Set())
+
+  return header;
 
 }
 
