@@ -180,7 +180,7 @@ function isDeleted(chunk) {
 }
 
 function hasEnoughBytesForHeader(chunk) {
-  return chunk.length < 32 || chunk.length < chunk.readUInt16LE(8)
+  return chunk.length < 32 || chunk.length < chunk.readUInt16LE(8);
 }
 
 module.exports = (options) => new Transform({
