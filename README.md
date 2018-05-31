@@ -1,4 +1,4 @@
-# YADBF
+# YADBF (Yet Another DBF parser)
 
 [![Greenkeeper badge](https://badges.greenkeeper.io/trescube/yadbf.svg)](https://greenkeeper.io/)
 [![Build Status](https://travis-ci.org/trescube/yadbf.svg?branch=master)](https://travis-ci.org/trescube/yadbf)
