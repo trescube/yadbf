@@ -1,0 +1,42 @@
+{
+    "env": {
+      "node": true,
+      "es6": true,
+      "mocha": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 2017
+    },
+    "rules": {
+      "curly": "error",
+      "eqeqeq": "error",
+      "max-depth": [
+        "error",
+        4
+      ],
+      "max-len": [
+        "error",
+        140
+      ],
+      "max-params": [
+        "error",
+        4
+      ],
+      "newIsCap": true,
+      "no-global-assign": "error",
+      "no-empty": "error",
+      "no-unreachable": "error",
+      "no-new": "error",
+      "no-plusplus": "error",
+      "no-undef": "error",
+      "no-unused-expressions": "error",
+      "quotes": [
+        "error",
+        "single"
+      ],
+      "semi": [
+        "error",
+        "always"
+      ]
+    }
+  }
