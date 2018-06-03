@@ -111,10 +111,10 @@ function parseHeader(chunk) {
   // if there are any duplicate field names, throw an error
   header.fields.reduce((allFieldNames, field) => {
     if (allFieldNames.has(field.name)) {
-      throw new Error(`Duplicate field name '${field.name}'`)
+      throw new Error(`Duplicate field name '${field.name}'`);
     } 
-    return allFieldNames.add(field.name)
-  }, new Set())
+    return allFieldNames.add(field.name);
+  }, new Set());
 
   return header;
 
@@ -189,15 +189,64 @@ function isDeleted(chunk) {
 
 }
 
-function hasEnoughBytesForHeader(chunk) {
-  return chunk.length < 32 || chunk.length < chunk.readUInt16LE(8);
+// helper function that returns true iff deleted is true
+const deletedRecordsShouldBeIncluded = (deleted) => deleted === true;
+
+function validateOffset(offset) {
+  if (offset === undefined) {
+    return 0;
+  }
+
+  if (offset < 0 || !Number.isInteger(offset)) {
+    throw new Error('offset must be a non-negative integer');
+  }
+
+  return offset;
+
 }
 
-// helper function that returns true iff deleted is true
-const deletedRecordsShouldBeIncluded = (deleted) => deleted === true
+function validateSize(size) {
+  if (size === undefined) {
+    return Infinity;
+  }
+
+  if (size < 0 || !Number.isInteger(size)) {
+    throw new Error('size must be a non-negative integer');
+  }
+
+  return size;
+
+}
 
 module.exports = (options = {}) => {
-  const includeDeleted = deletedRecordsShouldBeIncluded(options.deleted);
+  const offset = validateOffset(options.offset);
+  const size = validateSize(options.size);
+
+  const includeDeletedRecords = deletedRecordsShouldBeIncluded(options.deleted);
+
+  function hasEnoughBytesForHeader(chunk) {
+    return chunk.length < 32 || chunk.length < chunk.readUInt16LE(8);
+  }
+
+  function isEligbleForOutput(record) {
+    return !record['@meta'].deleted || includeDeletedRecords;
+  }
+
+  function isWithinPage(count) {
+    return count >= offset && count < offset + size;
+  }
+
+  function allRecordsHaveBeenProcessed(expectedNumberOfRecords, numberOfRecordsProcessed) {
+    return expectedNumberOfRecords === numberOfRecordsProcessed;
+  }
+
+  function aSingleByteRemains(unconsumedBytes) {
+    return unconsumedBytes.length === 1;
+  }
+
+  function firstByteIsEOFMarker(unconsumedBytes) {
+    return unconsumedBytes.readUInt8(0) === 0x1A;
+  }
 
   return new Transform({
     readableObjectMode: true,
@@ -234,8 +283,11 @@ module.exports = (options = {}) => {
           // remove the header bytes from the beginning of the chunk (for easier bookkeeping)
           chunk = chunk.slice(this.header.numberOfHeaderBytes);
 
-          // keep track of how many records have been made readable
-          this.numberOfRecordsPushed = 0;
+          // keep track of how many records have been made readable (used for end-of-stream detection)
+          this.totalRecordCount = 0;
+
+          // keep track of how many records *could* have been pushed (used for pagination)
+          this.eligibleRecordCount = 0;
 
         } catch (err) {
           this.destroy(err);
@@ -261,27 +313,33 @@ module.exports = (options = {}) => {
         try {
           const record = convertToObject(this.header, chunk);
 
-          // don't push deleted records (yet)
-          if (!record['@meta'].deleted || includeDeleted) {
-            this.push(record);
+          // only push if it's eligble for output and within the pagination params
+          if (isEligbleForOutput(record)) {
+            if (isWithinPage(this.eligibleRecordCount)) {
+              this.push(record);
+            }
+
+            // increment total # of records pushed for pagination check
+            this.eligibleRecordCount+=1;
           }
+
+          // increment total # of records consumed for end-of-stream check
+          this.totalRecordCount+=1;
 
         } catch (err) {
           this.destroy(err);
         }
       });
 
-      // increment total number of records pushed by the number pushed in this chunk
-      this.numberOfRecordsPushed += numberOfRecordsInThisChunk;
-
       // anything leftover after all the records in this chunk should be saved off til the next iteration
       this.unconsumedBytes = chunk.slice(this.header.numberOfBytesInRecord * numberOfRecordsInThisChunk);
 
       // if all the records have been emitted, proceed with shutdown
-      if (this.numberOfRecordsPushed === this.header.numberOfRecords && 
-          this.unconsumedBytes.length === 1) {
+      if (allRecordsHaveBeenProcessed(this.header.numberOfRecords, this.totalRecordCount) && 
+          aSingleByteRemains(this.unconsumedBytes)) {
+
         // throw an error if the last byte isn't the expected EOF marker
-        if (this.unconsumedBytes.readUInt8(0) !== 0x1A) {
+        if (!firstByteIsEOFMarker(this.unconsumedBytes)) {
           this.destroy('Last byte of file is not end-of-file marker');
         }
 
@@ -293,4 +351,4 @@ module.exports = (options = {}) => {
       callback();
     }
   });
-}
+};
