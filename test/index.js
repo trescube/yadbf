@@ -803,6 +803,79 @@ describe('header parsing', () => {
 
     });
 
+    it('header received 1 byte at a time should successfully parse', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // year/month/day
+      header.writeUInt8(97, 1);
+      header.writeUInt8(6, 2);
+      header.writeUInt8(25, 3);
+      // # of records, # of header bytes, # of bytes per record
+      header.writeUInt32LE(0, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      header.writeUInt16LE(37, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+      // language driver id/name
+      header.writeUInt8(17, 29);
+
+      // field definition
+      const field = Buffer.alloc(32);
+      field.write('field', 0, 'field'.length);
+      field.write('C', 11);
+      field.writeUInt8(1, 16); // length
+      field.writeUInt8(104, 17); // precision
+      field.writeUInt16LE(119, 18); // work area id
+      field.writeUInt8(1, 31); // prod MDX field flag
+
+      const entireBuffer = Buffer.concat([
+        header,
+        field,
+        fieldDescriptorArrayTerminator,
+        endOfFile
+      ])
+
+      const readableStream = new Readable();
+      // push the entire buffer a single byte at a time
+      for (let i = 0; i < entireBuffer.length; i++) {
+        readableStream.push(entireBuffer.slice(i, i+1))
+      }
+      readableStream.push(null);
+
+      readableStream
+        .pipe(yadbf())
+        .on('error', err => {
+          assert.fail(`no error should have been thrown: ${err}`);
+        })
+        .on('header', actualHeader => {
+          assert.deepEqual(actualHeader, {
+            version: 139,
+            dateOfLastUpdate: new Date(1997, 5, 25),
+            numberOfRecords: 0,
+            numberOfHeaderBytes: 65,
+            numberOfBytesInRecord: 37,
+            hasProductionMDXFile: 0x01,
+            langaugeDriverId: 17,
+            fields: [
+              {
+                name: 'field',
+                type: 'C',
+                length: 1,
+                precision: 104,
+                workAreaId: 119,
+                isIndexedInMDXFile: true
+              }
+            ]
+          });
+        })
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
+        .on('end', done);
+
+    })
+
   });
 
 });
@@ -900,7 +973,7 @@ describe('record parsing', () => {
 
     });
 
-    it('an error should be omitted when record first byte is not a space or asterisk', done => {
+    it('an error should be emitted when record first byte is not a space or asterisk', done => {
       const header = Buffer.alloc(32);
       // valid version
       header.writeUInt8(0x8B, 0);
@@ -949,7 +1022,7 @@ describe('record parsing', () => {
 
     });
 
-    it('an error should be omitted when file does not end with 0x1A', done => {
+    it('an error should be emitted when file does not end with 0x1A', done => {
       const header = Buffer.alloc(32);
       // valid version
       header.writeUInt8(0x8B, 0);
@@ -999,7 +1072,7 @@ describe('record parsing', () => {
 
     });
 
-    it('an error should be omitted when last character is not 0x1A', done => {
+    it('an error should be emitted when last character is not 0x1A', done => {
       const header = Buffer.alloc(32);
       // valid version
       header.writeUInt8(0x8B, 0);
