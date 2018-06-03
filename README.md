@@ -47,3 +47,11 @@ The following options are available and can be passed in a single object paramet
 | Name | Type | Description | Default |
 | --- | --- | --- | --- |
 | `deleted` | boolean | records flagged as deleted should be returned, non-boolean value is treated as "not supplied" | `false` |
+| `offset` | integer | number of records to process before emitting | `0` |
+| `size` | integer | number of records to emit | `Infinity` |
+
+Errors are thrown if any option value type is not the supported type.  
+
+### Notes
+
+Deleted records do not affect operation of `offset` and `size` options.  That is, if the entire .dbf contains 2 records, deleted and not deleted, respectively, then `offset` and `size` both set to `1` would output the second record.  
