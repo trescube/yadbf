@@ -1597,6 +1597,13 @@ describe('record parsing', () => {
 
 describe('options', () => {
   describe('deleted flag', () => {
+    it('non-boolean deleted should emit error', done => {
+      [null, {}, [], 'this is not a boolean', 17, 17.3, NaN, Infinity].forEach(deleted => {
+        assert.throws( yadbf.bind(null, { deleted: deleted } ), /^Error: deleted must be a boolean$/ );
+      });
+      done();
+    });
+
     it('deleted=true should include deleted records', done => {
       const header = Buffer.alloc(32);
       // valid version
