@@ -2075,7 +2075,7 @@ describe('options', () => {
       // valid version
       header.writeUInt8(0x8B, 0);
       // # of records, # of header bytes
-      header.writeUInt32LE(5, 4);
+      header.writeUInt32LE(3, 4);
       header.writeUInt16LE(32+32+1, 8);
       // # of bytes per record: 1 byte deleted flag, 1 byte for field
       header.writeUInt16LE(1+1, 10);
