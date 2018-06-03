@@ -120,6 +120,42 @@ function parseHeader(chunk) {
 
 }
 
+// type handlers keyed by the single character type designator
+const typeHandlers = {
+  D(value) {
+    return new Date(
+      value.substr(0, 4),
+      value.substr(4, 2),
+      value.substr(6, 2)
+    );
+  },
+  L(value) {
+    if (truthyValues.has(value)) {
+      return true;
+    } else if (falseyValues.has(value)) {
+      return false;
+    } else if (value !== '?') { // '?' means undefined
+      throw `Invalid L-type field value: ${value}`;
+    }
+  },
+  F(value) {
+    return parseFloat(value);
+  },
+  N(value) {
+    return parseFloat(value);
+  },
+  C(value) {
+    return value.replace(/[\u0000 ]+$/, '');
+  },
+  M(value) {
+    if (!validMTypeValueRegex.test(value)) {
+      throw `Invalid M-type field value: '${value}'`;
+    } else {
+      return value;
+    }
+  }
+};
+
 function convertToObject(header, chunk) {
   const record = {
     '@meta': {
@@ -128,50 +164,22 @@ function convertToObject(header, chunk) {
   };
 
   // keep track of how far we're into the record byte-wise
-  let offset = 1;
+  // start at 1 since the 0th byte is the deleted flag
+  let byteOffset = 1;
 
-  return header.fields.reduce((record, field) => {
-    const value = chunk.toString('utf-8', offset, offset+field.length);
+  header.fields.forEach(field => {
+    // read the value out as UTF-8
+    const value = chunk.toString('utf-8', byteOffset, byteOffset+field.length);
 
-    if (field.type === 'D') {
-      // read D-type fields as dates
-      record[field.name] = new Date(
-        value.substr(0, 4),
-        value.substr(4, 2),
-        value.substr(6, 2)
-      );
+    // assign the field into the record
+    record[field.name] = typeHandlers[field.type](value);
 
-    }
-    else if (field.type === 'L') {
-      if (truthyValues.has(value)) {
-        record[field.name] = true;
-      } else if (falseyValues.has(value)) {
-        record[field.name] = false;
-      } else if (value !== '?') {
-        throw `Invalid L-type field value: ${value}`;
-      }
+    // update where the next field starts
+    byteOffset += field.length;
 
-    }
-    else if (field.type === 'F' || field.type === 'N') {
-      record[field.name] = parseFloat(value);
-    }
-    else if (field.type === 'C') {
-      record[field.name] = value.replace(/[\u0000 ]+$/, '');
-    }
-    else if (field.type === 'M') {
-      if (!validMTypeValueRegex.test(value)) {
-        throw `Invalid M-type field value: '${value}'`;
-      } else {
-        record[field.name] = value;
-      }
+  });
 
-    }
-
-    offset += field.length;
-
-    return record;
-
-  }, record);
+  return record;
 
 }
 
