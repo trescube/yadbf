@@ -189,9 +189,6 @@ function isDeleted(chunk) {
 
 }
 
-// helper function that returns true iff deleted is true
-const deletedRecordsShouldBeIncluded = (deleted) => deleted === true;
-
 function validateOffset(offset) {
   if (offset === undefined) {
     return 0;
@@ -218,11 +215,23 @@ function validateSize(size) {
 
 }
 
+function validateDeleted(deleted) {
+  if (deleted === undefined) {
+    return false;
+  }
+
+  if (deleted !== true && deleted !== false) {
+    throw new Error('deleted must be a boolean');
+  }
+
+  return deleted;
+
+}
+
 module.exports = (options = {}) => {
   const offset = validateOffset(options.offset);
   const size = validateSize(options.size);
-
-  const includeDeletedRecords = deletedRecordsShouldBeIncluded(options.deleted);
+  const includeDeletedRecords = validateDeleted(options.deleted);
 
   function hasEnoughBytesForHeader(chunk) {
     return chunk.length < 32 || chunk.length < chunk.readUInt16LE(8);
