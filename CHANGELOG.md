@@ -1,3 +1,10 @@
+## 2.2.0: 2018/06/02
+
+- added pagination support (`offset` and `size` parameters)
+- updated README for better explanation of options
+- made `deleted` option parsing more strict
+- got code coverage to 100%
+
 ## 2.1.0: 2018/05/31
 
 - Add coverage tooling
