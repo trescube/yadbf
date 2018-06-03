@@ -1696,5 +1696,363 @@ describe('options', () => {
 
   });
 
+  describe('pagination', () => {
+    it('negative offset should emit error', done => {
+      assert.throws( yadbf.bind(null, { offset: -1 } ), /^Error: offset must be a non-negative integer$/ );
+      done();
+    });
+
+    it('non-integer offset should emit error', done => {
+      [null, {}, [], 'this is not an integer', 17.3, false, NaN, Infinity].forEach(offset => {
+        assert.throws( yadbf.bind(null, { offset: offset } ), /^Error: offset must be a non-negative integer$/ );
+      });
+      done();
+    });
+
+    it('negative size should emit error', done => {
+      assert.throws( yadbf.bind(null, { size: -1 } ), /^Error: size must be a non-negative integer$/ );
+      done();
+    });
+
+    it('non-integer size should emit error', done => {
+      [null, {}, [], 'this is not an integer', false, 17.3, NaN, Infinity].forEach(size => {
+        assert.throws( yadbf.bind(null, { size: size } ), /^Error: size must be a non-negative integer$/ );
+      });
+      done();
+    });
+
+    it('offset not supplied should return records from the first', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(3, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 1 byte for field
+      header.writeUInt16LE(1+1, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // field definition
+      const field = Buffer.alloc(32);
+      field.write('field', 0, 'field'.length);
+      field.write('C', 11);
+      field.writeUInt8(1, 16); // length
+      field.writeUInt8(104, 17); // precision
+      field.writeUInt16LE(119, 18); // work area id
+      field.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+1);
+      record1.write(' ', 0, 1);
+      record1.write('a', 1+0, 1);
+
+      // second record, # of bytes per record in length
+      const record2 = Buffer.alloc(1+1);
+      record2.write(' ', 0, 1);
+      record2.write('b', 1+0, 1);
+
+      // third record, # of bytes per record in length
+      const record3 = Buffer.alloc(1+1);
+      record3.write(' ', 0, 1);
+      record3.write('c', 1+0, 1);
+
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        record2, 
+        record3, 
+        endOfFile
+      ]));
+      readableStream.push(null);
+
+      const records = [];
+
+      readableStream
+        .pipe(yadbf({ size: 2 }))
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', record => records.push(record))
+        .on('end', () => {
+          assert.deepEqual(records.map(r => r.field), [ 'a', 'b' ]);
+          done(); 
+        });
+
+    });
+
+    it('size not supplied should default to all records from offset onward', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(3, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 1 byte for field
+      header.writeUInt16LE(1+1, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // field definition
+      const field = Buffer.alloc(32);
+      field.write('field', 0, 'field'.length);
+      field.write('C', 11);
+      field.writeUInt8(1, 16); // length
+      field.writeUInt8(104, 17); // precision
+      field.writeUInt16LE(119, 18); // work area id
+      field.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+1);
+      record1.write(' ', 0, 1);
+      record1.write('a', 1+0, 1);
+
+      // second record, # of bytes per record in length
+      const record2 = Buffer.alloc(1+1);
+      record2.write(' ', 0, 1);
+      record2.write('b', 1+0, 1);
+
+      // third record, # of bytes per record in length
+      const record3 = Buffer.alloc(1+1);
+      record3.write(' ', 0, 1);
+      record3.write('c', 1+0, 1);
+
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        record2, 
+        record3, 
+        endOfFile
+      ]));
+      readableStream.push(null);
+
+      const records = [];
+
+      readableStream
+        .pipe(yadbf({ offset: 1 }))
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', record => records.push(record))
+        .on('end', () => {
+          assert.deepEqual(records.map(r => r.field), [ 'b', 'c' ]);
+          done(); 
+        });
+        
+    });
+
+    it('size 0 should return 0 documents despite 3 records in stream', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(3, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 1 byte for field
+      header.writeUInt16LE(1+1, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // field definition
+      const field = Buffer.alloc(32);
+      field.write('field', 0, 'field'.length);
+      field.write('C', 11);
+      field.writeUInt8(1, 16); // length
+      field.writeUInt8(104, 17); // precision
+      field.writeUInt16LE(119, 18); // work area id
+      field.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+1);
+      record1.write(' ', 0, 1);
+      record1.write('a', 1+0, 1);
+
+      // second record, # of bytes per record in length
+      const record2 = Buffer.alloc(1+1);
+      record2.write(' ', 0, 1);
+      record2.write('b', 1+0, 1);
+
+      // third record, # of bytes per record in length
+      const record3 = Buffer.alloc(1+1);
+      record3.write(' ', 0, 1);
+      record3.write('c', 1+0, 1);
+
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        record2, 
+        record3, 
+        endOfFile
+      ]));
+      readableStream.push(null);
+
+      const records = [];
+
+      readableStream
+        .pipe(yadbf({ size: 0 }))
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', assert.fail.bind(null, 'no data events should have been emitted'))
+        .on('end', () => {
+          done(); 
+        });
+        
+    });
+
+    it('offset and size both supplied should be honored but not include deleted records', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(5, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 1 byte for field
+      header.writeUInt16LE(1+1, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // field definition
+      const field = Buffer.alloc(32);
+      field.write('field', 0, 'field'.length);
+      field.write('C', 11);
+      field.writeUInt8(1, 16); // length
+      field.writeUInt8(104, 17); // precision
+      field.writeUInt16LE(119, 18); // work area id
+      field.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+1);
+      record1.write('*', 0, 1);
+      record1.write('a', 1+0, 1);
+
+      // second record, # of bytes per record in length
+      const record2 = Buffer.alloc(1+1);
+      record2.write(' ', 0, 1);
+      record2.write('b', 1+0, 1);
+
+      // third record, # of bytes per record in length
+      const record3 = Buffer.alloc(1+1);
+      record3.write(' ', 0, 1);
+      record3.write('c', 1+0, 1);
+
+      // fourth record, # of bytes per record in length
+      const record4 = Buffer.alloc(1+1);
+      record4.write('*', 0, 1);
+      record4.write('d', 1+0, 1);
+
+      // fifth record, # of bytes per record in length
+      const record5 = Buffer.alloc(1+1);
+      record5.write(' ', 0, 1);
+      record5.write('e', 1+0, 1);
+
+      // sixth record, # of bytes per record in length
+      const record6 = Buffer.alloc(1+1);
+      record6.write(' ', 0, 1);
+      record6.write('f', 1+0, 1);
+
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        record2, 
+        record3,
+        record4,
+        record5, 
+        record6, 
+        endOfFile
+      ]));
+      readableStream.push(null);
+
+      const records = [];
+
+      readableStream
+        .pipe(yadbf({ offset: 1, size: 2 }))
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', record => records.push(record) )
+        .on('end', () => {
+          assert.deepEqual(records.map(r => r.field), [ 'c', 'e' ]);
+          done(); 
+        });
+        
+    });
+
+    it('specified size greater than number of records available should everything available', done => {
+      const header = Buffer.alloc(32);
+      // valid version
+      header.writeUInt8(0x8B, 0);
+      // # of records, # of header bytes
+      header.writeUInt32LE(5, 4);
+      header.writeUInt16LE(32+32+1, 8);
+      // # of bytes per record: 1 byte deleted flag, 1 byte for field
+      header.writeUInt16LE(1+1, 10);
+      // encryption flag
+      header.writeUInt8(0x00, 15);
+      // has production MDX file
+      header.writeUInt8(0x01, 28);
+
+      // field definition
+      const field = Buffer.alloc(32);
+      field.write('field', 0, 'field'.length);
+      field.write('C', 11);
+      field.writeUInt8(1, 16); // length
+      field.writeUInt8(104, 17); // precision
+      field.writeUInt16LE(119, 18); // work area id
+      field.writeUInt8(1, 31); // prod MDX field flag
+
+      // first record, # of bytes per record in length
+      const record1 = Buffer.alloc(1+1);
+      record1.write(' ', 0, 1);
+      record1.write('a', 1+0, 1);
+
+      // second record, # of bytes per record in length
+      const record2 = Buffer.alloc(1+1);
+      record2.write(' ', 0, 1);
+      record2.write('b', 1+0, 1);
+
+      // third record, # of bytes per record in length
+      const record3 = Buffer.alloc(1+1);
+      record3.write(' ', 0, 1);
+      record3.write('c', 1+0, 1);
+
+      const readableStream = new Readable();
+      readableStream.push(Buffer.concat([
+        header, 
+        field, 
+        fieldDescriptorArrayTerminator, 
+        record1, 
+        record2, 
+        record3,
+        endOfFile
+      ]));
+      readableStream.push(null);
+
+      const records = [];
+
+      readableStream
+        .pipe(yadbf({ size: 17 }))
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', record => records.push(record) )
+        .on('end', () => {
+          assert.deepEqual(records.map(r => r.field), [ 'a', 'b', 'c' ]);
+          done(); 
+        });
+
+    });
+
+  });
 
 });
