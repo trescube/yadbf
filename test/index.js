@@ -2,8 +2,254 @@ const assert = require('assert');
 const yadbf = require('..');
 const { Readable } = require('stream');
 
-const fieldDescriptorArrayTerminator = Buffer.from([0x0D]);
-const endOfFile = Buffer.from([0x1A]);
+class DBF {
+  constructor (build) {
+    this.build = build
+  }
+
+  get buffer() {
+    const header = Buffer.alloc(32)
+    header.writeUInt8(this.build._version, 0);
+
+    header.writeUInt8(this.build._date.getYear(), 1)
+    header.writeUInt8(this.build._date.getMonth(), 2)
+    header.writeUInt8(this.build._date.getDate(), 3)
+
+    if (this.build._numberOfRecords) {
+      header.writeUInt32LE(this.build._numberOfRecords, 4)
+    } else {
+      header.writeUInt32LE(this.build._records.length, 4)
+    }
+
+    if (this.build._numberOfHeaderBytes) {
+      header.writeUInt16LE(this.build._numberOfHeaderBytes, 8);
+    } else {
+      header.writeUInt16LE(32 + (this.build._fields.length * 32) + 1, 8)
+    }
+
+    if (this.build._numberOfBytesPerRecord) {
+      header.writeUInt16LE(this.build._numberOfBytesPerRecord, 10);
+    } else {
+      // when not explicitly specified, calculate bytes-per-record from fields + 1 (deleted flag)
+      const numberOfBytesPerRecord = this.build._fields.reduce((byteCount, field) => {
+        return byteCount + field.size
+      }, 1)
+
+      header.writeUInt16LE(numberOfBytesPerRecord, 10)
+    }
+
+    header.writeUInt8(this.build._encrypted, 15);
+    header.writeUInt8(this.build._hasProductionMDXFile, 28);
+    header.writeUInt8(this.build._languageDriverId, 29);
+
+    return Buffer.concat([
+      header,
+      ...this.build._fields.map(field => field.buffer),
+      Buffer.from([this.build._fieldDescriptorArrayTerminator]),
+      ...this.build._records.map(record => record.buffer),
+      Buffer.from([this.build._endOfFile])
+    ])
+  }
+
+  static get Builder() {
+    class Builder {
+      constructor() {
+        this._version = 0x8B
+        this._date = new Date()
+        this._fields = []
+        this._records = []
+        this._encrypted = false
+        this._fieldDescriptorArrayTerminator = 0x0D
+        this._endOfFile = 0x1A
+      }
+
+      version(_version) {
+        this._version = _version
+        return this
+      }
+
+      date(_date) {
+        this._date = _date
+        return this
+      }
+
+      numberOfRecords(_numberOfRecords) {
+        this._numberOfRecords = _numberOfRecords
+        return this
+      }
+
+      numberOfHeaderBytes(_numberOfHeaderBytes) {
+        this._numberOfHeaderBytes = _numberOfHeaderBytes
+        return this
+      }
+
+      numberOfBytesPerRecord(_numberOfBytesPerRecord) {
+        this._numberOfBytesPerRecord = _numberOfBytesPerRecord
+        return this
+      }
+
+      field(_field) {
+        this._fields.push(_field)
+        return this
+      }
+
+      record(_record) {
+        this._records.push(_record)
+        return this
+      }
+
+      encrypted(_encrypted = true) {
+        this._encrypted = _encrypted
+        return this
+      }
+
+      hasProductionMDXFile(_hasProductionMDXFile) {
+        this._hasProductionMDXFile = _hasProductionMDXFile
+        return this
+      }
+
+      languageDriverId(_languageDriverId) {
+        this._languageDriverId = _languageDriverId
+        return this
+      }
+
+      fieldDescriptorArrayTerminator(_fieldDescriptorArrayTerminator) {
+        this._fieldDescriptorArrayTerminator = _fieldDescriptorArrayTerminator
+        return this
+      }
+
+      endOfFile(_endOfFile) {
+        this._endOfFile = _endOfFile
+        return this
+      }
+
+      build() {
+        return new DBF(this)
+      }
+    }
+
+    return Builder
+  }
+}
+
+class Field {
+  constructor(build) {
+    this.build = build
+  }
+
+  get size() {
+    return this.build._size
+  }
+
+  get buffer() {
+    const buffer = Buffer.alloc(32)
+    buffer.write(this.build._name, 0, this.build._name.length);
+    buffer.write(this.build._type, 11)
+    buffer.writeUInt8(this.build._size, 16)
+    if (this.build._precision) {
+      buffer.writeUInt8(this.build._precision, 17)
+    }
+    buffer.writeUInt16LE(this.build._workAreaId, 18)
+    buffer.writeUInt8(this.build._prodMDXFieldFlag, 31)
+    return buffer
+  }
+
+  static get Builder() {
+    class Builder {
+      constructor(_name, _type) {
+        this._name = _name
+        this._type = _type
+
+        switch (_type) {
+          case 'D':
+            this._size = 8; break;
+          case 'L':
+            this._size = 1; break;
+          case 'M':
+            this._size = 10; break;
+          default:
+            this._size = 0; break;
+        }
+
+        this._precision = 0
+        this._workAreaId = 0
+        this._prodMDXFieldFlag = false
+      }
+
+      size(_size) {
+        this._size = _size
+        return this
+      }
+
+      precision(_precision) {
+        this._precision = _precision
+        return this
+      }
+
+      workAreaId(_workAreaId) {
+        this._workAreaId = _workAreaId
+        return this
+      }
+
+      prodMDXFieldFlag(_prodMDXFieldFlag = true) {
+        this._prodMDXFieldFlag = _prodMDXFieldFlag
+        return this
+      }
+
+      build() {
+        return new Field(this)
+      }
+    }
+
+    return Builder
+  }
+}
+
+class Record {
+  constructor(build) {
+    this.build = build
+  }
+
+  get buffer() {
+    const totalLength = this.build._sizes.reduce((acc, cur) => acc+cur, 1)
+
+    const buffer = Buffer.alloc(totalLength)
+    buffer.write(this.build._deleted, 0, 1)
+
+    this.build._values.reduce((offset, value, idx) => {
+      buffer.write(value, offset, value.length)
+      return offset + this.build._sizes[idx]
+    }, 1)
+    return buffer
+  }
+
+  static get Builder() {
+    class Builder {
+      constructor() {
+        this._deleted = ' '
+        this._values = []
+        this._sizes = []
+      }
+
+      field(_value, _field) {
+        this._values.push(_value)
+        this._sizes.push(_field.size)
+        return this
+      }
+
+      deleted(_deleted = '*') {
+        this._deleted = _deleted
+        return this
+      }
+
+      build() {
+        return new Record(this)
+      }
+    }
+
+    return Builder
+  }
+}
 
 describe('header parsing', () => {
   describe('insufficient header bytes', () => {
@@ -19,7 +265,6 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('insufficient header bytes should emit error', done => {
@@ -38,37 +283,16 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
 
   describe('version tests', () => {
     it('supported versions should not emit error', done => {
-      const header = Buffer.alloc(32);
-      // set a supported version number
-      header.writeUInt8(0x03, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+1, 8);
-      header.writeUInt16LE(17, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
+      // THIS MUST BE FIXED TO REMOVE OVERRIDE
+      const dbf = new DBF.Builder().version(0x03).numberOfBytesPerRecord(17).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        fieldDescriptorArrayTerminator, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -79,34 +303,13 @@ describe('header parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('unsupported versions should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set an unsupported version number
-      header.writeUInt8(0x02, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+1, 8);
-      header.writeUInt16LE(17, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
+      const dbf = new DBF.Builder().version(0x02).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        fieldDescriptorArrayTerminator, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -117,23 +320,15 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
 
   describe('values for encrypted flag', () => {
     it('encrypted flag set to 0x01 in header should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x03, 0);
-      // set valid number of header bytes
-      header.writeInt16LE(33, 8);
-      // set encryption value
-      header.writeUInt8(0x01, 15);
+      const dbf = new DBF.Builder().encrypted().build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([header, fieldDescriptorArrayTerminator]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -144,26 +339,13 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('encrypted flag set to 0x00 in header should not emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x03, 0);
-      // set valid number of header bytes
-      header.writeUInt32LE(0, 4);
-      header.writeInt16LE(32+1, 8);
-      header.writeUInt16LE(17, 10);
-      // set unencrypted value
-      header.writeUInt8(0x00, 15);
+      const dbf = new DBF.Builder().encrypted(0x00).numberOfBytesPerRecord(17).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -174,23 +356,13 @@ describe('header parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('non-0x00/0x01 encryption flag should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x03, 0);
-      // set valid number of header bytes
-      header.writeInt16LE(33, 8);
-      // set invalid encryption value
-      header.writeUInt8(0x02, 15);
+      const dbf = new DBF.Builder().encrypted(0x02).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        fieldDescriptorArrayTerminator
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -201,37 +373,15 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
 
   describe('values for number of header bytes', () => {
-    it('header bytes set to 33 should result in empty fields', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+1, 8);
-      header.writeUInt16LE(17, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
+    it('no fields described in header should result in empty fields', done => {
+      const dbf = new DBF.Builder().numberOfBytesPerRecord(17).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        fieldDescriptorArrayTerminator,
-        endOfFile 
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -242,24 +392,13 @@ describe('header parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('header bytes not set to value that is not divisble by 32 (plus 1) should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x8B, 0);
-      // set invalid number of header bytes
-      header.writeUInt16LE(32+2, 8);
-      // set unencrypted value
-      header.writeUInt8(0x00, 15);
+      const dbf = new DBF.Builder().numberOfHeaderBytes(32+2).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -270,26 +409,14 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
 
   it('last byte of header not equal to 0x0D should emit error', done => {
-    const header = Buffer.alloc(32);
-    // set valid version
-    header.writeUInt8(0x8B, 0);
-    // set invalid number of header bytes
-    header.writeUInt16LE(33, 8);
-    // set unencrypted value
-    header.writeUInt8(0x00, 15);
+    const dbf = new DBF.Builder().fieldDescriptorArrayTerminator(0x0C).build()
 
     const readableStream = new Readable();
-    readableStream.push(Buffer.concat([
-      header,
-      Buffer.from([0x0C]),
-      endOfFile
-    ]));
+    readableStream.push(dbf.buffer)
     readableStream.push(null);
 
     readableStream
@@ -300,73 +427,14 @@ describe('header parsing', () => {
       .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
       .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
       .on('end', done);
-
   });
 
   describe('values for production MDX file existence', () => {
-    it('value set to 0x00 in header should not emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x03, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+1, 8);
-      header.writeUInt16LE(17, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x00, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
-
-      const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ]));
-      readableStream.push(null);
-
-      readableStream
-        .pipe(yadbf())
-        .on('error', assert.fail.bind(null, 'no error event should have been emitted'))
-        .on('header', actualHeader => {
-          assert.ok(!actualHeader.hasProductionMDXFile);
-        })
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
-
-    });
-
     it('value set to 0x01 in header should not emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x03, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+1, 8);
-      header.writeUInt16LE(17, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
+      const dbf = new DBF.Builder().hasProductionMDXFile(0x01).numberOfBytesPerRecord(17).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -377,25 +445,13 @@ describe('header parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('non-0x00/0x01 value should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x03, 0);
-      // set valid number of header bytes
-      header.writeInt16LE(33, 8);
-      // set valid encryption value
-      header.writeUInt8(0x00, 15);
-      // set invalid production MDX file existence value
-      header.writeUInt8(0x02, 28);
+      const dbf = new DBF.Builder().hasProductionMDXFile(0x02).numberOfBytesPerRecord(17).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        fieldDescriptorArrayTerminator
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -406,40 +462,17 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
 
   describe('field tests', () => {
     it('field length equal to 255 should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x00, 28);
+      const field = new Field.Builder('field1', 'C').size(255).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length); // name
-      field.write('C', 11); // type
-      field.writeUInt8(255, 16); // length
-      field.writeUInt8(1, 17); // decimal count
-      field.writeUInt16LE(1, 18); // work area id
-      field.writeUInt8(0x00, 31); // prod MDX field flag
+      const dbf = new DBF.Builder().field(field).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field,
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -450,35 +483,15 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('field type not one of C, D, F, L, M, or N should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x8B, 0);
-      // set valid number of header bytes to accommodate a single field
-      header.writeUInt16LE(32+32+1, 8);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x00, 28);
+      const field = new Field.Builder('field1', 'X').size(17).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length); // name
-      field.write('X', 11); // type
-      field.writeUInt8(17, 16); // length
-      field.writeUInt8(1, 17); // decimal count
-      field.writeUInt16LE(1, 18); // work area id
-      field.writeUInt8(0x00, 31); // prod MDX field flag, ERROR CONDITION: must be either 0x00 or 0x01
+      const dbf = new DBF.Builder().field(field).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator 
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -489,35 +502,15 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('non-0x00/0x01 value for production MDX file index tag should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x8B, 0);
-      // set valid number of header bytes to accommodate a single field
-      header.writeUInt16LE(32+32+1, 8);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x00, 28);
+      const field = new Field.Builder('field1', 'C').size(17).prodMDXFieldFlag(0x02).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length); // name
-      field.write('C', 11); // type
-      field.writeUInt8(17, 16); // length
-      field.writeUInt8(1, 17); // decimal count
-      field.writeUInt16LE(1, 18); // work area id
-      field.writeUInt8(0x02, 31); // prod MDX field flag
+      const dbf = new DBF.Builder().field(field).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator 
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -528,35 +521,15 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('field with type D and not 8 bytes in length should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x8B, 0);
-      // set valid number of header bytes to accommodate a single field
-      header.writeUInt16LE(32+32+1, 8);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x00, 28);
+      const field = new Field.Builder('field1', 'D').size(9).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length); // name
-      field.write('D', 11); // type
-      field.writeUInt8(9, 16); // length
-      field.writeUInt8(1, 17); // decimal count
-      field.writeUInt16LE(1, 18); // work area id
-      field.writeUInt8(0x00, 31); // prod MDX field flag
+      const dbf = new DBF.Builder().field(field).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator 
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -567,35 +540,15 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('field with type L and not 1 byte in length should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x8B, 0);
-      // set valid number of header bytes to accommodate a single field
-      header.writeUInt16LE(32+32+1, 8);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x00, 28);
+      const field = new Field.Builder('field1', 'L').size(2).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length); // name
-      field.write('L', 11); // type
-      field.writeUInt8(2, 16); // length
-      field.writeUInt8(1, 17); // decimal count
-      field.writeUInt16LE(1, 18); // work area id
-      field.writeUInt8(0x00, 31); // prod MDX field flag
+      const dbf = new DBF.Builder().field(field).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator 
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -606,35 +559,15 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('field with type M and not 10 bytes in length should emit error', done => {
-      const header = Buffer.alloc(32);
-      // set valid version
-      header.writeUInt8(0x8B, 0);
-      // set valid number of header bytes to accommodate a single field
-      header.writeUInt16LE(32+32+1, 8);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x00, 28);
+      const field = new Field.Builder('field1', 'M').size(11).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length); // name
-      field.write('M', 11); // type
-      field.writeUInt8(11, 16); // length
-      field.writeUInt8(1, 17); // decimal count
-      field.writeUInt16LE(1, 18); // work area id
-      field.writeUInt8(0x00, 31); // prod MDX field flag
+      const dbf = new DBF.Builder().field(field).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator 
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -645,62 +578,17 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('duplicate field name should emit error', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+32+32+32+1, 8);
-      header.writeUInt16LE(37, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
+      const field1 = new Field.Builder('field1', 'C').size(3).build()
+      const field2 = new Field.Builder('field2', 'C').size(2).build()
+      const field3 = new Field.Builder('field1', 'L').size(1).build()
 
-      // first field definition
-      const field1 = Buffer.alloc(32);
-      field1.write('field1', 0, 'field1'.length);
-      field1.write('C', 11);
-      field1.writeUInt8(157, 16); // length
-      field1.writeUInt8(104, 17); // precision
-      field1.writeUInt16LE(119, 18); // work area id
-      field1.writeUInt8(1, 31); // prod MDX field flag
-
-      // second field definition
-      const field2 = Buffer.alloc(32);
-      field2.write('field2', 0, 'field2'.length);
-      field2.write('C', 11);
-      field2.writeUInt8(13, 16); // length
-      field2.writeUInt8(12, 17); // precision
-      field2.writeUInt16LE(120, 18); // work area id
-      field2.writeUInt8(0, 31); // prod MDX field flag
-
-      // third field definition (different type but same name as field1)
-      const field3 = Buffer.alloc(32);
-      field3.write('field1', 0, 'field1'.length);
-      field3.write('L', 11);
-      field3.writeUInt8(1, 16); // length
-      field3.writeUInt8(1, 31); // prod MDX field flag
+      const dbf = new DBF.Builder().field(field1).field(field2).field(field3).build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field1,
-        field2,
-        field3, // this is the duplicate
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -711,57 +599,24 @@ describe('header parsing', () => {
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
 
   describe('successful parsing', () => {
     it('all fields should be parsed', (done) => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+32+32+1, 8);
-      header.writeUInt16LE(37, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
+      const field1 = new Field.Builder('field1', 'C').size(157).precision(104).workAreaId(119).prodMDXFieldFlag(true).build()
+      const field2 = new Field.Builder('field2', 'C').size(13).precision(12).workAreaId(120).prodMDXFieldFlag(false).build()
 
-      // first field definition
-      const field1 = Buffer.alloc(32);
-      field1.write('field1', 0, 'field1'.length);
-      field1.write('C', 11);
-      field1.writeUInt8(157, 16); // length
-      field1.writeUInt8(104, 17); // precision
-      field1.writeUInt16LE(119, 18); // work area id
-      field1.writeUInt8(1, 31); // prod MDX field flag
-
-      // second field definition
-      const field2 = Buffer.alloc(32);
-      field2.write('field2', 0, 'field2'.length);
-      field2.write('C', 11);
-      field2.writeUInt8(13, 16); // length
-      field2.writeUInt8(12, 17); // precision
-      field2.writeUInt16LE(120, 18); // work area id
-      field2.writeUInt8(0, 31); // prod MDX field flag
+      const dbf = new DBF.Builder()
+        .date(new Date(1997, 6, 25))
+        .hasProductionMDXFile(0x01)
+        .languageDriverId(17)
+        .field(field1)
+        .field(field2)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field1,
-        field2,
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -775,7 +630,7 @@ describe('header parsing', () => {
             dateOfLastUpdate: new Date(1997, 5, 25),
             numberOfRecords: 0,
             numberOfHeaderBytes: 97,
-            numberOfBytesInRecord: 37,
+            numberOfBytesInRecord: 171,
             hasProductionMDXFile: 0x01,
             langaugeDriverId: 17,
             fields: [
@@ -804,45 +659,17 @@ describe('header parsing', () => {
     });
 
     it('header received 1 byte at a time should successfully parse', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // year/month/day
-      header.writeUInt8(97, 1);
-      header.writeUInt8(6, 2);
-      header.writeUInt8(25, 3);
-      // # of records, # of header bytes, # of bytes per record
-      header.writeUInt32LE(0, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      header.writeUInt16LE(37, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
-      // language driver id/name
-      header.writeUInt8(17, 29);
+      const field = new Field.Builder('field', 'C').size(1).precision(104).workAreaId(119).prodMDXFieldFlag(true).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field', 0, 'field'.length);
-      field.write('C', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
-
-      const entireBuffer = Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        endOfFile
-      ])
+      const dbf = new DBF.Builder()
+        .date(new Date(1997, 6, 25))
+        .hasProductionMDXFile(0x01)
+        .languageDriverId(17)
+        .field(field)
+        .build()
 
       const readableStream = new Readable();
-      // push the entire buffer a single byte at a time
-      for (let i = 0; i < entireBuffer.length; i++) {
-        readableStream.push(entireBuffer.slice(i, i+1))
-      }
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -856,7 +683,7 @@ describe('header parsing', () => {
             dateOfLastUpdate: new Date(1997, 5, 25),
             numberOfRecords: 0,
             numberOfHeaderBytes: 65,
-            numberOfBytesInRecord: 37,
+            numberOfBytesInRecord: 2,
             hasProductionMDXFile: 0x01,
             langaugeDriverId: 17,
             fields: [
@@ -873,76 +700,42 @@ describe('header parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     })
-
   });
-
 });
 
 describe('record parsing', () => {
   describe('fields', () => {
     it('all non-deleted fields and records should be parsed', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(3, 4);
-      header.writeUInt16LE(32+32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field, 30 bytes 2nd field
-      header.writeUInt16LE(1+25+30, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field1 = new Field.Builder('field1', 'C').size(25).build()
+      const field2 = new Field.Builder('field2', 'C').size(30).build()
 
-      // first field definition
-      const field1 = Buffer.alloc(32);
-      field1.write('field1', 0, 'field1'.length);
-      field1.write('C', 11);
-      field1.writeUInt8(25, 16); // length
-      field1.writeUInt8(104, 17); // precision
-      field1.writeUInt16LE(119, 18); // work area id
-      field1.writeUInt8(1, 31); // prod MDX field flag
+      const record1 = new Record.Builder()
+        .field('record 1 field 1 value', field1)
+        .field('record 1 field 2 value', field2)
+        .build()
 
-      // second field definition
-      const field2 = Buffer.alloc(32);
-      field2.write('field2', 0, 'field2'.length);
-      field2.write('C', 11);
-      field2.writeUInt8(30, 16); // length
-      field2.writeUInt8(12, 17); // precision
-      field2.writeUInt16LE(120, 18); // work area id
-      field2.writeUInt8(0, 31); // prod MDX field flag
+      const record2 = new Record.Builder()
+        .field('record 2 field 1 value', field1)
+        .field('record 2 field 2 value', field2)
+        .deleted()
+        .build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+25+30);
-      record1.write(' ', 0, 1);
-      record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
-      record1.write('record 1 field 2 value', 1+25, 'record 1 field 2 value'.length);
+      const record3 = new Record.Builder()
+        .field('record 3 field 1 value', field1)
+        .field('record 3 field 2 value', field2)
+        .build()
 
-      // second record, is deleted, # of bytes per record in length
-      const record2 = Buffer.alloc(1+25+30);
-      record2.write('*', 0, 1);
-      record2.write('record 2 field 1 value', 1+0, 'record 2 field 1 value'.length);
-      record2.write('record 2 field 2 value', 1+25, 'record 2 field 2 value'.length);
-
-      // third record, # of bytes per record in length
-      const record3 = Buffer.alloc(1+25+30);
-      record3.write(' ', 0, 1);
-      record3.write('record 3 field 1 value', 1+0, 'record 3 field 1 value'.length);
-      record3.write('record 3 field 2 value', 1+25, 'record 3 field 2 value'.length);
+      const dbf = new DBF.Builder()
+        .field(field1)
+        .field(field2)
+        .record(record1)
+        .record(record2)
+        .record(record3)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field1, 
-        field2, 
-        fieldDescriptorArrayTerminator, 
-        record1, 
-        record2, 
-        record3, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       const records = [
@@ -959,7 +752,7 @@ describe('record parsing', () => {
           },
           field1: 'record 3 field 1 value',
           field2: 'record 3 field 2 value'
-        }      
+        }
       ];
 
       readableStream
@@ -968,47 +761,25 @@ describe('record parsing', () => {
         .on('data', record => assert.deepEqual(record, records.shift()))
         .on('end', () => {
           assert.equal(records.length, 0);
-          done(); 
+          done();
         });
-
     });
 
-    it('an error should be emitted when record first byte is not a space or asterisk', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(2, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field
-      header.writeUInt16LE(1+25, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+    it('an error should be emitted when first byte of record is not a space or asterisk', done => {
+      const field = new Field.Builder('field', 'C').size(25).build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length);
-      field.write('C', 11);
-      field.writeUInt8(25, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .deleted('#')
+        .field('record 1 field 1 value', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+25);
-      record.write('#', 0, 1);
-      record.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field, 
-        fieldDescriptorArrayTerminator, 
-        record, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -1019,46 +790,23 @@ describe('record parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
 
     it('an error should be emitted when file does not end with 0x1A', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field
-      header.writeUInt16LE(1+25, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(25).build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length);
-      field.write('C', 11);
-      field.writeUInt8(25, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('record 1 field 1 value', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+25);
-      record.write(' ', 0, 1);
-      record.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .endOfFile('Z')
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        Buffer.from('Z')
-      ]));
-
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -1069,45 +817,23 @@ describe('record parsing', () => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
         })
         .on('end', done);
-
     });
 
     it('an error should be emitted when last character is not 0x1A', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field
-      header.writeUInt16LE(1+25, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(25).build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length);
-      field.write('C', 11);
-      field.writeUInt8(25, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('record 1 field 1 value', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+25);
-      record.write(' ', 0, 1);
-      record.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .endOfFile(0x1b)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        Buffer.from([0x1b])
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -1118,95 +844,50 @@ describe('record parsing', () => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
         })
         .on('end', done);
-
     });
 
   });
 
   describe('C-type field parsing', () => {
     it('values should right-trimmed but not left-trimmed', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 10 bytes for character field
-      header.writeUInt16LE(1+10, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(11).build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('C_field', 0, 'C_field'.length);
-      field.write('C', 11);
-      field.writeUInt8(10, 16); // length
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('  value   ', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+10);
-      record.write(' ', 0);
-      record.write('  value   ', 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
         .pipe(yadbf())
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
-        .on('data', record => assert.equal(record.C_field, '  value'))
+        .on('data', record => assert.equal(record.field, '  value'))
         .on('end', done);
-
     });
-
   });
 
   describe('D-type field parsing', () => {
     it('D-type fields should be parsed as dates', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 8 bytes for 'D' field
-      header.writeUInt16LE(1+8, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'D').build()
 
-      // first field definition
-      const field1 = Buffer.alloc(32);
-      field1.write('field1', 0, 'field1'.length);
-      field1.write('D', 11);
-      field1.writeUInt8(8, 16); // length
-      field1.writeUInt8(104, 17); // precision
-      field1.writeUInt16LE(119, 18); // work area id
-      field1.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('19520719', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+8);
-      record1.write(' ', 0, 1);
-      record1.write('19520719', 1, 8);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field1,
-        fieldDescriptorArrayTerminator,
-        record1,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -1216,187 +897,100 @@ describe('record parsing', () => {
           '@meta': {
             deleted: false
           },
-          field1: new Date(1952, 7, 19)
+          field: new Date(1952, 7, 19)
         }))
         .on('end', done);
-
     });
-
   });
 
   describe('L-type field parsing', () => {
     ['Y', 'y', 'T', 't'].forEach(truthy_value => {
       it(`L-type fields should treat '${truthy_value}' as true`, done => {
-        const header = Buffer.alloc(32);
-        // valid version
-        header.writeUInt8(0x8B, 0);
-        // # of records, # of header bytes
-        header.writeUInt32LE(1, 4);
-        header.writeUInt16LE(32+32+1, 8);
-        // # of bytes per record: 1 byte deleted flag, 1 byte for logical field
-        header.writeUInt16LE(1+1, 10);
-        // encryption flag
-        header.writeUInt8(0x00, 15);
-        // has production MDX file
-        header.writeUInt8(0x01, 28);
+        const field = new Field.Builder('field', 'L').build()
 
-        // first field definition
-        const field = Buffer.alloc(32);
-        field.write('L_field', 0, 'L_field'.length);
-        field.write('L', 11);
-        field.writeUInt8(1, 16); // length
-        field.writeUInt8(1, 31); // prod MDX field flag
+        const record = new Record.Builder()
+          .field(truthy_value, field)
+          .build()
 
-        // first record, # of bytes per record in length
-        const record = Buffer.alloc(1+1);
-        record.write(' ', 0);
-        record.write(truthy_value, 1);
+        const dbf = new DBF.Builder()
+          .field(field)
+          .record(record)
+          .build()
 
         const readableStream = new Readable();
-        readableStream.push(Buffer.concat([
-          header,
-          field,
-          fieldDescriptorArrayTerminator,
-          record,
-          endOfFile
-        ]));
+        readableStream.push(dbf.buffer)
         readableStream.push(null);
 
         readableStream
           .pipe(yadbf())
           .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
-          .on('data', record => assert.equal(record.L_field, true))
+          .on('data', record => assert.equal(record.field, true))
           .on('end', done);
-
       });
-
     });
 
     ['N', 'n', 'F', 'f'].forEach(falsey_value => {
       it(`L-type fields should treat '${falsey_value}' as false`, done => {
-        const header = Buffer.alloc(32);
-        // valid version
-        header.writeUInt8(0x8B, 0);
-        // # of records, # of header bytes
-        header.writeUInt32LE(1, 4);
-        header.writeUInt16LE(32+32+1, 8);
-        // # of bytes per record: 1 byte deleted flag, 1 byte for logical field
-        header.writeUInt16LE(1+1, 10);
-        // encryption flag
-        header.writeUInt8(0x00, 15);
-        // has production MDX file
-        header.writeUInt8(0x01, 28);
+        const field = new Field.Builder('field', 'L').build()
 
-        // first field definition
-        const field = Buffer.alloc(32);
-        field.write('L_field', 0, 'L_field'.length);
-        field.write('L', 11);
-        field.writeUInt8(1, 16); // length
-        field.writeUInt8(1, 31); // prod MDX field flag
+        const record = new Record.Builder()
+          .field(falsey_value, field)
+          .build()
 
-        // first record, # of bytes per record in length
-        const record = Buffer.alloc(1+1);
-        record.write(' ', 0);
-        record.write(falsey_value, 1);
+        const dbf = new DBF.Builder()
+          .field(field)
+          .record(record)
+          .build()
 
         const readableStream = new Readable();
-        readableStream.push(Buffer.concat([
-          header,
-          field,
-          fieldDescriptorArrayTerminator,
-          record,
-          endOfFile
-        ]));
+        readableStream.push(dbf.buffer)
         readableStream.push(null);
 
         readableStream
           .pipe(yadbf())
           .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
-          .on('data', record => assert.equal(record.L_field, false))
+          .on('data', record => assert.equal(record.field, false))
           .on('end', done);
-
       });
-
     });
 
     it('L-type fields should treat \'?\' as undefined', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 1 byte for logical field
-      header.writeUInt16LE(1+1, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'L').build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('L_field', 0, 'L_field'.length);
-      field.write('L', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('?', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+1);
-      record.write(' ', 0);
-      record.write('?', 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
         .pipe(yadbf())
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
-        .on('data', record => assert.equal(record.L_field, undefined))
+        .on('data', record => assert.equal(record.field, undefined))
         .on('end', done);
-
     });
 
     it('L-type fields should emit error on unknown fields', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 1 byte for logical field
-      header.writeUInt16LE(1+1, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'L').build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('L_field', 0, 'L_field'.length);
-      field.write('L', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('R', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+1);
-      record.write(' ', 0);
-      record.write('R', 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -1406,147 +1000,77 @@ describe('record parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
 
-  describe('F/n-type field parsing', () => {
+  describe('F/N-type field parsing', () => {
     it('F-type field', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte for deleted flag, 19 byte for logical field
-      header.writeUInt16LE(1+19, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'F').size(19).build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('F_field', 0, 'L_field'.length);
-      field.write('F', 11);
-      field.writeUInt8(19, 16); // length
-      field.writeUInt8(11, 17); // precision
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('123.45678', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+19);
-      record.write(' ', 0);
-      record.write('123.45678', 1, '123.45678'.length);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
         .pipe(yadbf())
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('data', record => {
-          assert.equal(record.F_field, 123.45678);
+          assert.equal(record.field, 123.45678);
         })
         .on('end', done);
-
     });
 
     it('N-type field', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte for deleted flag, 19 byte for logical field
-      header.writeUInt16LE(1+19, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'F').size(19).build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('N_field', 0, 'N_field'.length);
-      field.write('N', 11);
-      field.writeUInt8(19, 16); // length
-      field.writeUInt8(11, 17); // precision
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('123.45678', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+19);
-      record.write(' ', 0);
-      record.write('123.45678', 1, '123.45678'.length);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
         .pipe(yadbf())
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('data', record => {
-          assert.equal(record.N_field, 123.45678);
+          assert.equal(record.field, 123.45678);
         })
         .on('end', done);
-
     });
-
   });
 
   describe('M-type field parsing', () => {
     it('field values consisting of all numbers should be accepted', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 10 bytes for 'M' field
-      header.writeUInt16LE(1+10, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'M').build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length);
-      field.write('M', 11);
-      field.writeUInt8(10, 16); // length
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('1357924680', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+10);
-      record.write(' ', 0, 1);
-      record.write('1357924680', 1, 10);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
-
-      const records = [];
 
       readableStream
         .pipe(yadbf())
@@ -1556,51 +1080,27 @@ describe('record parsing', () => {
             '@meta': {
               deleted: false
             },
-            field1: '1357924680'
+            field: '1357924680'
           });
         })
         .on('end', done);
-
     });
 
     it('field values consisting of all spaces should be accepted', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 10 bytes for 'M' field
-      header.writeUInt16LE(1+10, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'M').build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length);
-      field.write('M', 11);
-      field.writeUInt8(10, 16); // length
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('          ', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+10);
-      record.write(' ', 0, 1);
-      record.write('          ', 1, 10);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
-
-      const records = [];
 
       readableStream
         .pipe(yadbf())
@@ -1610,7 +1110,7 @@ describe('record parsing', () => {
             '@meta': {
               deleted: false
             },
-            field1: '          '
+            field: '          '
           });
         })
         .on('end', done);
@@ -1618,40 +1118,19 @@ describe('record parsing', () => {
     });
 
     it('field values not entirely number or spaces should emit error', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(1, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 10 bytes for 'M' field
-      header.writeUInt16LE(1+10, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'M').build()
 
-      // first field definition
-      const field = Buffer.alloc(32);
-      field.write('field1', 0, 'field1'.length);
-      field.write('M', 11);
-      field.writeUInt8(10, 16); // length
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record = new Record.Builder()
+        .field('     4    ', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record = Buffer.alloc(1+10);
-      record.write(' ', 0, 1);
-      record.write('     4    ', 1, 10);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header,
-        field,
-        fieldDescriptorArrayTerminator,
-        record,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       readableStream
@@ -1661,11 +1140,8 @@ describe('record parsing', () => {
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
-
     });
-
   });
-
 });
 
 describe('options', () => {
@@ -1678,66 +1154,35 @@ describe('options', () => {
     });
 
     it('deleted=true should include deleted records', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(3, 4);
-      header.writeUInt16LE(32+32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 25 bytes 1st field, 30 bytes 2nd field
-      header.writeUInt16LE(1+25+30, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field1 = new Field.Builder('field1', 'C').size(25).build()
+      const field2 = new Field.Builder('field2', 'C').size(30).build()
 
-      // first field definition
-      const field1 = Buffer.alloc(32);
-      field1.write('field1', 0, 'field1'.length);
-      field1.write('C', 11);
-      field1.writeUInt8(25, 16); // length
-      field1.writeUInt8(104, 17); // precision
-      field1.writeUInt16LE(119, 18); // work area id
-      field1.writeUInt8(1, 31); // prod MDX field flag
+      const record1 = new Record.Builder()
+        .field('record 1 field 1 value', field1)
+        .field('record 1 field 2 value', field2)
+        .build()
 
-      // second field definition
-      const field2 = Buffer.alloc(32);
-      field2.write('field2', 0, 'field2'.length);
-      field2.write('C', 11);
-      field2.writeUInt8(30, 16); // length
-      field2.writeUInt8(12, 17); // precision
-      field2.writeUInt16LE(120, 18); // work area id
-      field2.writeUInt8(0, 31); // prod MDX field flag
+      const record2 = new Record.Builder()
+        .deleted()
+        .field('record 2 field 1 value', field1)
+        .field('record 2 field 2 value', field2)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+25+30);
-      record1.write(' ', 0, 1);
-      record1.write('record 1 field 1 value', 1+0, 'record 1 field 1 value'.length);
-      record1.write('record 1 field 2 value', 1+25, 'record 1 field 2 value'.length);
+      const record3 = new Record.Builder()
+        .field('record 3 field 1 value', field1)
+        .field('record 3 field 2 value', field2)
+        .build()
 
-      // second record, deleted, # of bytes per record in length
-      const record2 = Buffer.alloc(1+25+30);
-      record2.write('*', 0, 1);
-      record2.write('record 2 field 1 value', 1+0, 'record 2 field 1 value'.length);
-      record2.write('record 2 field 2 value', 1+25, 'record 2 field 2 value'.length);
-
-      // third record, # of bytes per record in length
-      const record3 = Buffer.alloc(1+25+30);
-      record3.write(' ', 0, 1);
-      record3.write('record 3 field 1 value', 1+0, 'record 3 field 1 value'.length);
-      record3.write('record 3 field 2 value', 1+25, 'record 3 field 2 value'.length);
+      const dbf = new DBF.Builder()
+        .field(field1)
+        .field(field2)
+        .record(record1)
+        .record(record2)
+        .record(record3)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field1, 
-        field2, 
-        fieldDescriptorArrayTerminator, 
-        record1, 
-        record2, 
-        record3, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       const records = [
@@ -1761,7 +1206,7 @@ describe('options', () => {
           },
           field1: 'record 3 field 1 value',
           field2: 'record 3 field 2 value'
-        }      
+        }
       ];
 
       readableStream
@@ -1770,10 +1215,9 @@ describe('options', () => {
         .on('data', record => assert.deepEqual(record, records.shift()))
         .on('end', () => {
           assert.equal(records.length, 0);
-          done(); 
+          done();
         });
     });
-
   });
 
   describe('pagination', () => {
@@ -1802,53 +1246,29 @@ describe('options', () => {
     });
 
     it('offset not supplied should return records from the first', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(3, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 1 byte for field
-      header.writeUInt16LE(1+1, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(1).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field', 0, 'field'.length);
-      field.write('C', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record1 = new Record.Builder()
+        .field('a', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+1);
-      record1.write(' ', 0, 1);
-      record1.write('a', 1+0, 1);
+      const record2 = new Record.Builder()
+        .field('b', field)
+        .build()
 
-      // second record, # of bytes per record in length
-      const record2 = Buffer.alloc(1+1);
-      record2.write(' ', 0, 1);
-      record2.write('b', 1+0, 1);
+      const record3 = new Record.Builder()
+        .field('c', field)
+        .build()
 
-      // third record, # of bytes per record in length
-      const record3 = Buffer.alloc(1+1);
-      record3.write(' ', 0, 1);
-      record3.write('c', 1+0, 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record1)
+        .record(record2)
+        .record(record3)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field, 
-        fieldDescriptorArrayTerminator, 
-        record1, 
-        record2, 
-        record3, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       const records = [];
@@ -1859,59 +1279,34 @@ describe('options', () => {
         .on('data', record => records.push(record))
         .on('end', () => {
           assert.deepEqual(records.map(r => r.field), [ 'a', 'b' ]);
-          done(); 
+          done();
         });
-
     });
 
     it('size not supplied should default to all records from offset onward', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(3, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 1 byte for field
-      header.writeUInt16LE(1+1, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(1).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field', 0, 'field'.length);
-      field.write('C', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record1 = new Record.Builder()
+        .field('a', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+1);
-      record1.write(' ', 0, 1);
-      record1.write('a', 1+0, 1);
+      const record2 = new Record.Builder()
+        .field('b', field)
+        .build()
 
-      // second record, # of bytes per record in length
-      const record2 = Buffer.alloc(1+1);
-      record2.write(' ', 0, 1);
-      record2.write('b', 1+0, 1);
+      const record3 = new Record.Builder()
+        .field('c', field)
+        .build()
 
-      // third record, # of bytes per record in length
-      const record3 = Buffer.alloc(1+1);
-      record3.write(' ', 0, 1);
-      record3.write('c', 1+0, 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record1)
+        .record(record2)
+        .record(record3)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field, 
-        fieldDescriptorArrayTerminator, 
-        record1, 
-        record2, 
-        record3, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       const records = [];
@@ -1922,59 +1317,34 @@ describe('options', () => {
         .on('data', record => records.push(record))
         .on('end', () => {
           assert.deepEqual(records.map(r => r.field), [ 'b', 'c' ]);
-          done(); 
+          done();
         });
-        
     });
 
     it('size 0 should return 0 documents despite 3 records in stream', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(3, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 1 byte for field
-      header.writeUInt16LE(1+1, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(1).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field', 0, 'field'.length);
-      field.write('C', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record1 = new Record.Builder()
+        .field('a', field)
+        .build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+1);
-      record1.write(' ', 0, 1);
-      record1.write('a', 1+0, 1);
+      const record2 = new Record.Builder()
+        .field('b', field)
+        .build()
 
-      // second record, # of bytes per record in length
-      const record2 = Buffer.alloc(1+1);
-      record2.write(' ', 0, 1);
-      record2.write('b', 1+0, 1);
+      const record3 = new Record.Builder()
+        .field('c', field)
+        .build()
 
-      // third record, # of bytes per record in length
-      const record3 = Buffer.alloc(1+1);
-      record3.write(' ', 0, 1);
-      record3.write('c', 1+0, 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record1)
+        .record(record2)
+        .record(record3)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field, 
-        fieldDescriptorArrayTerminator, 
-        record1, 
-        record2, 
-        record3, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       const records = [];
@@ -1984,77 +1354,32 @@ describe('options', () => {
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('data', assert.fail.bind(null, 'no data events should have been emitted'))
         .on('end', () => {
-          done(); 
+          done();
         });
-        
     });
 
     it('offset and size both supplied should be honored but not include deleted records', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(5, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 1 byte for field
-      header.writeUInt16LE(1+1, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(1).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field', 0, 'field'.length);
-      field.write('C', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record1 = new Record.Builder().field('a', field).deleted().build()
+      const record2 = new Record.Builder().field('b', field).build()
+      const record3 = new Record.Builder().field('c', field).build()
+      const record4 = new Record.Builder().field('d', field).deleted().build()
+      const record5 = new Record.Builder().field('e', field).build()
+      const record6 = new Record.Builder().field('f', field).build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+1);
-      record1.write('*', 0, 1);
-      record1.write('a', 1+0, 1);
-
-      // second record, # of bytes per record in length
-      const record2 = Buffer.alloc(1+1);
-      record2.write(' ', 0, 1);
-      record2.write('b', 1+0, 1);
-
-      // third record, # of bytes per record in length
-      const record3 = Buffer.alloc(1+1);
-      record3.write(' ', 0, 1);
-      record3.write('c', 1+0, 1);
-
-      // fourth record, # of bytes per record in length
-      const record4 = Buffer.alloc(1+1);
-      record4.write('*', 0, 1);
-      record4.write('d', 1+0, 1);
-
-      // fifth record, # of bytes per record in length
-      const record5 = Buffer.alloc(1+1);
-      record5.write(' ', 0, 1);
-      record5.write('e', 1+0, 1);
-
-      // sixth record, # of bytes per record in length
-      const record6 = Buffer.alloc(1+1);
-      record6.write(' ', 0, 1);
-      record6.write('f', 1+0, 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record1)
+        .record(record2)
+        .record(record3)
+        .record(record4)
+        .record(record5)
+        .record(record6)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field, 
-        fieldDescriptorArrayTerminator, 
-        record1, 
-        record2, 
-        record3,
-        record4,
-        record5, 
-        record6, 
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       const records = [];
@@ -2065,59 +1390,26 @@ describe('options', () => {
         .on('data', record => records.push(record) )
         .on('end', () => {
           assert.deepEqual(records.map(r => r.field), [ 'c', 'e' ]);
-          done(); 
+          done();
         });
-        
     });
 
     it('specified size greater than number of records available should everything available', done => {
-      const header = Buffer.alloc(32);
-      // valid version
-      header.writeUInt8(0x8B, 0);
-      // # of records, # of header bytes
-      header.writeUInt32LE(3, 4);
-      header.writeUInt16LE(32+32+1, 8);
-      // # of bytes per record: 1 byte deleted flag, 1 byte for field
-      header.writeUInt16LE(1+1, 10);
-      // encryption flag
-      header.writeUInt8(0x00, 15);
-      // has production MDX file
-      header.writeUInt8(0x01, 28);
+      const field = new Field.Builder('field', 'C').size(1).build()
 
-      // field definition
-      const field = Buffer.alloc(32);
-      field.write('field', 0, 'field'.length);
-      field.write('C', 11);
-      field.writeUInt8(1, 16); // length
-      field.writeUInt8(104, 17); // precision
-      field.writeUInt16LE(119, 18); // work area id
-      field.writeUInt8(1, 31); // prod MDX field flag
+      const record1 = new Record.Builder().field('a', field).build()
+      const record2 = new Record.Builder().field('b', field).build()
+      const record3 = new Record.Builder().field('c', field).build()
 
-      // first record, # of bytes per record in length
-      const record1 = Buffer.alloc(1+1);
-      record1.write(' ', 0, 1);
-      record1.write('a', 1+0, 1);
-
-      // second record, # of bytes per record in length
-      const record2 = Buffer.alloc(1+1);
-      record2.write(' ', 0, 1);
-      record2.write('b', 1+0, 1);
-
-      // third record, # of bytes per record in length
-      const record3 = Buffer.alloc(1+1);
-      record3.write(' ', 0, 1);
-      record3.write('c', 1+0, 1);
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record1)
+        .record(record2)
+        .record(record3)
+        .build()
 
       const readableStream = new Readable();
-      readableStream.push(Buffer.concat([
-        header, 
-        field, 
-        fieldDescriptorArrayTerminator, 
-        record1, 
-        record2, 
-        record3,
-        endOfFile
-      ]));
+      readableStream.push(dbf.buffer)
       readableStream.push(null);
 
       const records = [];
@@ -2128,11 +1420,8 @@ describe('options', () => {
         .on('data', record => records.push(record) )
         .on('end', () => {
           assert.deepEqual(records.map(r => r.field), [ 'a', 'b', 'c' ]);
-          done(); 
+          done();
         });
-
     });
-
   });
-
 });

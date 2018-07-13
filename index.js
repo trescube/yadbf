@@ -142,7 +142,6 @@ module.exports = (options = {}) => {
       // if all the records have been emitted, proceed with shutdown
       if (allRecordsHaveBeenProcessed(this.header.numberOfRecords, this.totalRecordCount) &&
           aSingleByteRemains(this.unconsumedBytes)) {
-
         // throw an error if the last byte isn't the expected EOF marker
         if (!firstByteIsEOFMarker(this.unconsumedBytes)) {
           this.destroy('Last byte of file is not end-of-file marker');
@@ -334,7 +333,6 @@ module.exports = (options = {}) => {
     }
 
     throw `Invalid deleted record value: ${String.fromCharCode(firstByte)}`;
-
   }
 
   function validateOffset(offset) {
@@ -347,7 +345,6 @@ module.exports = (options = {}) => {
     }
 
     return offset;
-
   }
 
   function validateSize(size) {
@@ -360,7 +357,6 @@ module.exports = (options = {}) => {
     }
 
     return size;
-
   }
 
   function validateDeleted(deleted) {
@@ -373,7 +369,6 @@ module.exports = (options = {}) => {
     }
 
     return deleted;
-
   }
 
 };
