@@ -289,7 +289,7 @@ describe('header parsing', () => {
   describe('version tests', () => {
     it('supported versions should not emit error', done => {
       // THIS MUST BE FIXED TO REMOVE OVERRIDE
-      const dbf = new DBF.Builder().version(0x03).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().version(0x03).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -342,7 +342,7 @@ describe('header parsing', () => {
     });
 
     it('encrypted flag set to 0x00 in header should not emit error', done => {
-      const dbf = new DBF.Builder().encrypted(0x00).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().encrypted(0x00).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -378,7 +378,7 @@ describe('header parsing', () => {
 
   describe('values for number of header bytes', () => {
     it('no fields described in header should result in empty fields', done => {
-      const dbf = new DBF.Builder().numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -431,7 +431,7 @@ describe('header parsing', () => {
 
   describe('values for production MDX file existence', () => {
     it('value set to 0x01 in header should not emit error', done => {
-      const dbf = new DBF.Builder().hasProductionMDXFile(0x01).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().hasProductionMDXFile(0x01).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -448,7 +448,7 @@ describe('header parsing', () => {
     });
 
     it('non-0x00/0x01 value should emit error', done => {
-      const dbf = new DBF.Builder().hasProductionMDXFile(0x02).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().hasProductionMDXFile(0x02).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
