@@ -109,14 +109,13 @@ module.exports = (options = {}) => {
         delete this.unconsumedBytes;
       }
 
-      // calculate the number of records available in this chunk
-      // there will most likely be a fragment of the next record at the end, so floor it
-      const numberOfRecordsInThisChunk = Math.floor(chunk.length / this.header.numberOfBytesInRecord);
+      // process records from the chunk while
+      while (hasEnoughBytesForRecord(chunk, this.header) && moreRecordsAreExpected.bind(this)()) {
+        // get enough bytes for the record
+        const recordSizedChunk = chunk.slice(0, this.header.numberOfBytesInRecord);
 
-      // slice up the chunk into record-size bites, then iterate and push
-      Array.from({length: numberOfRecordsInThisChunk}, sliceIntoChunks.bind(this, chunk)).forEach(chunk => {
         try {
-          const record = convertChunkToRecord(this.header, chunk);
+          const record = convertToRecord(recordSizedChunk, this.header);
 
           // only push if it's eligble for output and within the pagination params
           if (isEligbleForOutput(record)) {
@@ -131,40 +130,48 @@ module.exports = (options = {}) => {
           // increment total # of records consumed for end-of-stream check
           this.totalRecordCount+=1;
 
+          // remove the slice from the chunk
+          chunk = chunk.slice(recordSizedChunk.length);
+
         } catch (err) {
           this.destroy(err);
+          return callback();
         }
-      });
 
-      // anything leftover after all the records in this chunk should be saved off til the next iteration
-      this.unconsumedBytes = chunk.slice(this.header.numberOfBytesInRecord * numberOfRecordsInThisChunk);
+      }
 
       // if all the records have been emitted, proceed with shutdown
       if (allRecordsHaveBeenProcessed(this.header.numberOfRecords, this.totalRecordCount) &&
-          aSingleByteRemains(this.unconsumedBytes)) {
+          aSingleByteRemains(chunk)) {
         // throw an error if the last byte isn't the expected EOF marker
-        if (!firstByteIsEOFMarker(this.unconsumedBytes)) {
+        if (!firstByteIsEOFMarker(chunk)) {
           this.destroy('Last byte of file is not end-of-file marker');
         }
 
         // otherwise clear up unconsumedBytes and signal end-of-stream
         delete this.unconsumedBytes;
         this.push(null);
+      } else {
+        this.unconsumedBytes = chunk;
       }
 
       callback();
     }
   });
 
-  function sliceIntoChunks(chunk, val, i) {
-    return chunk.slice(
-      i * this.header.numberOfBytesInRecord,
-      i * this.header.numberOfBytesInRecord + this.header.numberOfBytesInRecord)
-  }
-
   // returns true if enough bytes have been read to parse the entire header
   function hasEnoughBytesForHeader(chunk) {
     return chunk.length >= 32 && chunk.length >= chunk.readUInt16LE(8);
+  }
+
+  // returns true if enough bytes have been read to parse a record
+  function hasEnoughBytesForRecord(chunk, header) {
+    return chunk.length >= header.numberOfBytesInRecord;
+  }
+
+  // returns true if the number of processed records is less than the number of declared records
+  function moreRecordsAreExpected() {
+    return this.totalRecordCount < this.header.numberOfRecords;
   }
 
   // returns true if record is not deleted or deleted records should be included
@@ -296,7 +303,7 @@ module.exports = (options = {}) => {
     };
   }
 
-  function convertChunkToRecord(header, chunk) {
+  function convertToRecord(chunk, header) {
     const record = {
       '@meta': {
         deleted: isDeleted(chunk)

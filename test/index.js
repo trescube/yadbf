@@ -289,7 +289,7 @@ describe('header parsing', () => {
   describe('version tests', () => {
     it('supported versions should not emit error', done => {
       // THIS MUST BE FIXED TO REMOVE OVERRIDE
-      const dbf = new DBF.Builder().version(0x03).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().version(0x03).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -342,7 +342,7 @@ describe('header parsing', () => {
     });
 
     it('encrypted flag set to 0x00 in header should not emit error', done => {
-      const dbf = new DBF.Builder().encrypted(0x00).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().encrypted(0x00).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -378,7 +378,7 @@ describe('header parsing', () => {
 
   describe('values for number of header bytes', () => {
     it('no fields described in header should result in empty fields', done => {
-      const dbf = new DBF.Builder().numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -431,7 +431,7 @@ describe('header parsing', () => {
 
   describe('values for production MDX file existence', () => {
     it('value set to 0x01 in header should not emit error', done => {
-      const dbf = new DBF.Builder().hasProductionMDXFile(0x01).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().hasProductionMDXFile(0x01).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -448,7 +448,7 @@ describe('header parsing', () => {
     });
 
     it('non-0x00/0x01 value should emit error', done => {
-      const dbf = new DBF.Builder().hasProductionMDXFile(0x02).numberOfBytesPerRecord(17).build()
+      const dbf = new DBF.Builder().hasProductionMDXFile(0x02).build()
 
       const readableStream = new Readable();
       readableStream.push(dbf.buffer)
@@ -705,6 +705,74 @@ describe('header parsing', () => {
 });
 
 describe('record parsing', () => {
+  describe('anomalous file conditions', () => {
+    it('no fields and no records should produce no errors', done => {
+      const dbf = new DBF.Builder().build()
+
+      const readableStream = new Readable();
+      readableStream.push(dbf.buffer)
+      readableStream.push(null);
+
+      readableStream
+        .pipe(yadbf())
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', assert.fail.bind(null, 'no data events should have been emitted'))
+        .on('end', () => {
+          done();
+        });
+    })
+
+    it('fields but no records should emit neither \'error\' nor \'data\' events', done => {
+      const field1 = new Field.Builder('field1', 'C').size(25).build()
+      const field2 = new Field.Builder('field2', 'C').size(30).build()
+
+      const dbf = new DBF.Builder().field(field1).field(field2).build()
+
+      const readableStream = new Readable();
+      readableStream.push(dbf.buffer)
+      readableStream.push(null);
+
+      readableStream
+        .pipe(yadbf())
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', assert.fail.bind(null, 'no data events should have been emitted'))
+        .on('end', () => {
+          done();
+        });
+    })
+
+    it('records but no fields should emit \'data\' events', done => {
+      const record1 = new Record.Builder().build()
+      const record2 = new Record.Builder().build()
+      const record3 = new Record.Builder().build()
+
+      const dbf = new DBF.Builder().record(record1).record(record2).record(record3).build()
+
+      const readableStream = new Readable();
+      readableStream.push(dbf.buffer)
+      readableStream.push(null);
+
+      let count = 0
+
+      readableStream
+        .pipe(yadbf())
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', (record) => {
+          assert.deepEqual(record, {
+            '@meta': {
+              deleted: false
+            }
+          })
+          count+=1
+        })
+        .on('end', () => {
+          assert.equal(count, 3)
+          done();
+        });
+    })
+
+  })
+
   describe('fields', () => {
     it('all non-deleted fields and records should be parsed', done => {
       const field1 = new Field.Builder('field1', 'C').size(25).build()
