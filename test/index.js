@@ -668,8 +668,12 @@ describe('header parsing', () => {
         .field(field)
         .build();
 
+      const entireBuffer = dbf.buffer;
+
       const readableStream = new Readable();
-      readableStream.push(dbf.buffer);
+      for (let i = 0; i < entireBuffer.length; i+=1) {
+        readableStream.push(entireBuffer.slice(i, i+1));
+      }
       readableStream.push(null);
 
       readableStream
@@ -1098,7 +1102,7 @@ describe('record parsing', () => {
     });
 
     it('N-type field', done => {
-      const field = new Field.Builder('field', 'F').size(19).build();
+      const field = new Field.Builder('field', 'N').size(19).build();
 
       const record = new Record.Builder()
         .field('123.45678', field)
