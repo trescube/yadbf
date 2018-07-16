@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/trescube/yadbf.svg?branch=master)](https://travis-ci.org/trescube/yadbf)
 [![Coverage Status](https://coveralls.io/repos/github/trescube/yadbf/badge.svg?branch=master)](https://coveralls.io/github/trescube/yadbf?branch=master)
 
-This project is a streaming DBF parser that throws errors for the slightest transgressions.
+This project is a streaming DBF parser that throws errors for the slightest transgressions.  It was originally written to support .dbf files found in Esri shapefiles for the [OpenAddresses submit-service](https://github.com/openaddresses/submit-service) but it may work for your .dbf file.
 
 ## Requirements
 
