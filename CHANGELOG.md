@@ -1,3 +1,7 @@
+## 3.0.0: 2018/07/16
+
+- switched to class instantiation
+
 ## 2.2.0: 2018/06/02
 
 - added pagination support (`offset` and `size` parameters)
@@ -19,4 +23,4 @@
 
 ## 1.0.0: 2018/02/28
 
-- Bad version, don't use, only emits events, doesn't transform as I had planned to do 
+- Bad version, don't use, only emits events, doesn't transform as I had planned to do
