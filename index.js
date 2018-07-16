@@ -20,28 +20,31 @@ class YADBF extends Transform {
   }
 
   _transform(chunk, encoding, callback) {
+    // if there were unconsumed bytes from the previous _transform(), then prepend
+    //  them to the current chunk before proceeding
+    if (this.unconsumedBytes) {
+      this.unconsumedBytes = Buffer.concat( [this.unconsumedBytes, chunk] );
+    } else {
+      this.unconsumedBytes = chunk;
+    }
+
     // if the header hasn't been parsed yet, do so now and emit it
     if (!this.header) {
-      if (this.unconsumedBytes) {
-        chunk = Buffer.concat([this.unconsumedBytes, chunk]);
-        delete this.unconsumedBytes;
-      }
-
       // if there aren't enough bytes to read the header, save off the accumulated
-      //  bytes for later use
-      if (!hasEnoughBytesForHeader(chunk)) {
-        this.unconsumedBytes = chunk;
+      //  bytes for later use and return
+      if (!hasEnoughBytesForHeader(this.unconsumedBytes)) {
         return callback();
       }
 
+      // otherwise, attempt to parse the header
       try {
-        this.header = parseHeader(chunk);
+        this.header = parseHeader(this.unconsumedBytes);
 
         // emit the header for outside consumption
         this.emit('header', this.header);
 
         // remove the header bytes from the beginning of the chunk (for easier bookkeeping)
-        chunk = chunk.slice(this.header.numberOfHeaderBytes);
+        this.unconsumedBytes = this.unconsumedBytes.slice(this.header.numberOfHeaderBytes);
 
         // keep track of how many records have been made readable (used for end-of-stream detection)
         this.totalRecordCount = 0;
@@ -55,16 +58,10 @@ class YADBF extends Transform {
       }
     }
 
-    // if there were leftover bytes from the previous chunk, prepend them to the current chunk
-    if (this.unconsumedBytes) {
-      chunk = Buffer.concat( [this.unconsumedBytes, chunk], this.unconsumedBytes.length + chunk.length );
-      delete this.unconsumedBytes;
-    }
-
-    // process records from the chunk while
-    while (hasEnoughBytesForRecord(chunk, this.header) && moreRecordsAreExpected.bind(this)()) {
+    // process records from the unconsumed bytes
+    while (hasEnoughBytesForRecord(this.unconsumedBytes, this.header) && moreRecordsAreExpected.bind(this)()) {
       // get enough bytes for the record
-      const recordSizedChunk = chunk.slice(0, this.header.numberOfBytesInRecord);
+      const recordSizedChunk = this.unconsumedBytes.slice(0, this.header.numberOfBytesInRecord);
 
       try {
         const record = convertToRecord(recordSizedChunk, this.header);
@@ -82,8 +79,8 @@ class YADBF extends Transform {
         // increment total # of records consumed for end-of-stream check
         this.totalRecordCount+=1;
 
-        // remove the slice from the chunk
-        chunk = chunk.slice(recordSizedChunk.length);
+        // remove the slice from the unconsumed bytes
+        this.unconsumedBytes = this.unconsumedBytes.slice(recordSizedChunk.length);
 
       } catch (err) {
         this.destroy(err);
@@ -94,17 +91,15 @@ class YADBF extends Transform {
 
     // if all the records have been emitted, proceed with shutdown
     if (allRecordsHaveBeenProcessed(this.header.numberOfRecords, this.totalRecordCount) &&
-        aSingleByteRemains(chunk)) {
+        aSingleByteRemains(this.unconsumedBytes)) {
       // throw an error if the last byte isn't the expected EOF marker
-      if (!firstByteIsEOFMarker(chunk)) {
+      if (!firstByteIsEOFMarker(this.unconsumedBytes)) {
         this.destroy('Last byte of file is not end-of-file marker');
       }
 
       // otherwise clear up unconsumedBytes and signal end-of-stream
       delete this.unconsumedBytes;
       this.push(null);
-    } else {
-      this.unconsumedBytes = chunk;
     }
 
     callback();
