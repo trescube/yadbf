@@ -4,6 +4,9 @@ class YADBF extends Transform {
   constructor(options = {}) {
     super({ readableObjectMode: true });
 
+    // create an empty buffer to simplify logic later
+    this.unconsumedBytes = Buffer.alloc(0);
+
     this.offset = validateOffset(options.offset);
     this.size = validateSize(options.size);
     this.includeDeletedRecords = validateDeleted(options.deleted);
@@ -20,13 +23,8 @@ class YADBF extends Transform {
   }
 
   _transform(chunk, encoding, callback) {
-    // if there were unconsumed bytes from the previous _transform(), then prepend
-    //  them to the current chunk before proceeding
-    if (this.unconsumedBytes) {
-      this.unconsumedBytes = Buffer.concat( [this.unconsumedBytes, chunk] );
-    } else {
-      this.unconsumedBytes = chunk;
-    }
+    // append the chunk to unconsumed bytes for easier bookkeeping
+    this.unconsumedBytes = Buffer.concat( [this.unconsumedBytes, chunk] );
 
     // if the header hasn't been parsed yet, do so now and emit it
     if (!this.header) {
