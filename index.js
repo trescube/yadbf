@@ -10,6 +10,12 @@ class YADBF extends Transform {
     this.offset = validateOffset(options.offset);
     this.size = validateSize(options.size);
     this.includeDeletedRecords = validateDeleted(options.deleted);
+
+    // keep track of how many records have been made readable (used for end-of-stream detection)
+    this.totalRecordCount = 0;
+
+    // keep track of how many records *could* have been pushed (used for pagination)
+    this.eligibleRecordCount = 0;
   }
 
   _final(callback) {
@@ -43,12 +49,6 @@ class YADBF extends Transform {
 
         // remove the header bytes from the beginning of the chunk (for easier bookkeeping)
         this.unconsumedBytes = this.unconsumedBytes.slice(this.header.numberOfHeaderBytes);
-
-        // keep track of how many records have been made readable (used for end-of-stream detection)
-        this.totalRecordCount = 0;
-
-        // keep track of how many records *could* have been pushed (used for pagination)
-        this.eligibleRecordCount = 0;
 
       } catch (err) {
         this.destroy(err);
