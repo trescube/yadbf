@@ -134,7 +134,7 @@ const typeHandlers = {
       return true;
     } else if (falseyValues.has(value)) {
       return false;
-    } else if (value !== '?') { // '?' means undefined
+    } else if (value !== '?' && value !== ' ') { // '?' or ' ' means undefined
       throw `Invalid L-type field value: ${value}`;
     }
   },

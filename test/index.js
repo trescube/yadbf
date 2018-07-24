@@ -1049,6 +1049,27 @@ describe('record parsing', () => {
         .on('end', done);
     });
 
+    it('L-type fields should treat \' \' as undefined', done => {
+      const field = new Field.Builder('field', 'L').build();
+      const record = new Record.Builder()
+        .field(' ', field)
+        .build();
+      const dbf = new DBF.Builder()
+        .field(field)
+        .record(record)
+        .build();
+
+      const readableStream = new Readable();
+      readableStream.push(dbf.buffer);
+      readableStream.push(null);
+
+      readableStream
+        .pipe(new YADBF())
+        .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+        .on('data', record => assert.equal(record.field, undefined))
+        .on('end', done);
+    });    
+
     it('L-type fields should emit error on unknown fields', done => {
       const field = new Field.Builder('field', 'L').build();
 
