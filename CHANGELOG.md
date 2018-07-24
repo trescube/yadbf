@@ -1,3 +1,7 @@
+## 3.0.1: 2018/07/24
+
+- interpret ` ` as `undefined` (conforms to [spec](http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm)), thx @donpedro!
+
 ## 3.0.0: 2018/07/16
 
 - switched to class instantiation
