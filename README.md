@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/trescube/yadbf.svg?branch=master)](https://travis-ci.org/trescube/yadbf)
 [![Coverage Status](https://coveralls.io/repos/github/trescube/yadbf/badge.svg?branch=master)](https://coveralls.io/github/trescube/yadbf?branch=master)
 
-This project is a streaming DBF parser that throws errors for the slightest transgressions.  
+This project is a streaming DBF parser that throws errors for the slightest transgressions.
 
 It was originally written to support .dbf files found in Esri shapefiles for the [OpenAddresses submit-service](https://github.com/openaddresses/submit-service) but it may work for your .dbf file.
 
@@ -53,6 +53,8 @@ The following options are available and can be passed to the constructor in a si
 | `size` | integer | number of records to emit | `Infinity` |
 
 `offset` and `size` are implemented to follow pagination functionality.  Errors are thrown if any option value type is not the supported type.
+
+Using the pagination functionality destroys the stream after the records within the requested page have been pushed.  For example, if `offset=20` and `size=10` are supplied in `options`, then YADBF will immediately stop processing after the 30th record.
 
 ### Notes
 
