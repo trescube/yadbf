@@ -135,7 +135,7 @@ const typeHandlers = {
     } else if (falseyValues.has(value)) {
       return false;
     } else if (value !== '?' && value !== ' ') { // '?' or ' ' means undefined
-      throw `Invalid L-type field value: ${value}`;
+      throw new Error(`Invalid L-type field value: ${value}`);
     }
   },
   F(value) {
@@ -149,7 +149,7 @@ const typeHandlers = {
   },
   M(value) {
     if (!validMTypeValueRegex.test(value)) {
-      throw `Invalid M-type field value: '${value}'`;
+      throw new Error(`Invalid M-type field value: '${value}'`);
     } else {
       return value;
     }
@@ -343,7 +343,7 @@ function isDeleted(chunk) {
     return true;
   }
 
-  throw `Invalid deleted record value: ${String.fromCharCode(firstByte)}`;
+  throw new Error(`Invalid deleted record value: ${String.fromCharCode(firstByte)}`);
 }
 
 // validates that `offset` is a non-negative integer, defaulting to `Infinity` if not supplied
