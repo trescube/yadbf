@@ -1,3 +1,8 @@
+## 3.0.2: 2018/07/27
+
+- throw proper errors in all cases
+- updated README and helper function docs
+
 ## 3.0.1: 2018/07/24
 
 - interpret ` ` as `undefined` (conforms to [spec](http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm)), thx @donpedro!
