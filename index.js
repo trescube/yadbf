@@ -261,20 +261,23 @@ function parseHeader(buffer) {
   return header;
 }
 
+// parses up 32 bytes from `fieldBytes` into a valid field definition
 function parseHeaderField(fieldBytes, val, i) {
   const field = fieldBytes.slice(i*32, i*32+32);
 
+  // extract the field length from the 16th byte
   const length = field.readUInt8(16);
   if (length === 255) {
     throw new Error('Field length must be less than 255');
   }
 
+  // extract the field type from the 11th byte
   const type = field.toString('utf-8', 11, 12);
   if (!supportedFieldTypes.has(type)) {
     throw new Error(`Field type must be one of: ${Array.from(supportedFieldTypes).join(', ')}`);
   }
 
-  // check types & lengths
+  // validate that certain types have expected lengths
   if (type === 'D' && length !== 8) {
     throw new Error(`Invalid D (date) field length: ${length}`);
   }
@@ -285,11 +288,13 @@ function parseHeaderField(fieldBytes, val, i) {
     throw new Error(`Invalid M (memo) field length: ${length}`);
   }
 
+  // i have no idea what this is, but read it anyway since it might be of use
   const isIndexedInMDXFile = field.readUInt8(31);
   if (isIndexedInMDXFile > 1) {
     throw new Error(`Invalid indexed in production MDX file value: ${isIndexedInMDXFile}`);
   }
 
+  // return an object representing the field definition
   return {
     name: field.toString('utf-8', 0, 10).replace(/\0/g, ''),
     type: type,
@@ -300,6 +305,7 @@ function parseHeaderField(fieldBytes, val, i) {
   };
 }
 
+// converts a record-sized chunk into an object based on the metadata available in `header`
 function convertToRecord(chunk, header) {
   const record = {
     '@meta': {
@@ -326,6 +332,7 @@ function convertToRecord(chunk, header) {
   return record;
 }
 
+// determines if the first byte of a chunk is a valid deleted flag, or throws an error otherwise
 function isDeleted(chunk) {
   const firstByte = chunk.readUInt8(0, 1);
 
@@ -339,6 +346,7 @@ function isDeleted(chunk) {
   throw `Invalid deleted record value: ${String.fromCharCode(firstByte)}`;
 }
 
+// validates that `offset` is a non-negative integer, defaulting to `Infinity` if not supplied
 function validateOffset(offset) {
   if (offset === undefined) {
     return 0;
@@ -351,6 +359,7 @@ function validateOffset(offset) {
   return offset;
 }
 
+// validates that `size` is a non-negative integer, defaulting to `Infinity` if not supplied
 function validateSize(size) {
   if (size === undefined) {
     return Infinity;
@@ -363,6 +372,7 @@ function validateSize(size) {
   return size;
 }
 
+// validates that `deleted` is a boolean, defaulting to `false` if not supplied
 function validateDeleted(deleted) {
   if (deleted === undefined) {
     return false;
