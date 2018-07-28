@@ -858,7 +858,7 @@ describe('record parsing', () => {
         .pipe(new YADBF())
         .on('header', header => assert.ok('header should have been emitted'))
         .on('error', err => {
-          assert.equal(err, 'Invalid deleted record value: #');
+          assert.equal(err, 'Error: Invalid deleted record value: #');
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
@@ -1068,7 +1068,7 @@ describe('record parsing', () => {
         .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
         .on('data', record => assert.equal(record.field, undefined))
         .on('end', done);
-    });    
+    });
 
     it('L-type fields should emit error on unknown fields', done => {
       const field = new Field.Builder('field', 'L').build();
@@ -1089,7 +1089,7 @@ describe('record parsing', () => {
       readableStream
         .pipe(new YADBF())
         .on('error', err => {
-          assert.equal(err, 'Invalid L-type field value: R');
+          assert.equal(err, 'Error: Invalid L-type field value: R');
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
@@ -1229,7 +1229,7 @@ describe('record parsing', () => {
       readableStream
         .pipe(new YADBF())
         .on('error', err => {
-          assert.equal(err, 'Invalid M-type field value: \'     4    \'');
+          assert.equal(err, 'Error: Invalid M-type field value: \'     4    \'');
         })
         .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
         .on('end', done);
