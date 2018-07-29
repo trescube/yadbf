@@ -1,4 +1,5 @@
 const { Transform } = require('stream');
+const Iconv = require('iconv-lite');
 
 class YADBF extends Transform {
   constructor(options = {}) {
@@ -16,6 +17,8 @@ class YADBF extends Transform {
 
     // keep track of how many records *could* have been pushed (used for pagination)
     this.eligibleRecordCount = 0;
+
+    this.encoding = options.encoding || 'utf-8';
   }
 
   _final(callback) {
@@ -62,7 +65,7 @@ class YADBF extends Transform {
       const recordSizedChunk = this.unconsumedBytes.slice(0, this.header.numberOfBytesInRecord);
 
       try {
-        const record = convertToRecord(recordSizedChunk, this.header);
+        const record = convertToRecord(recordSizedChunk, this.header, this.encoding);
 
         // only push if it's eligble for output and within the pagination params
         if (isEligibleForOutput(record, this.includeDeletedRecords)) {
@@ -306,7 +309,7 @@ function parseHeaderField(fieldBytes, val, i) {
 }
 
 // converts a record-sized chunk into an object based on the metadata available in `header`
-function convertToRecord(chunk, header) {
+function convertToRecord(chunk, header, encoding) {
   const record = {
     '@meta': {
       deleted: isDeleted(chunk)
@@ -318,8 +321,8 @@ function convertToRecord(chunk, header) {
   let byteOffset = 1;
 
   header.fields.forEach(field => {
-    // read the value out as UTF-8
-    const value = chunk.toString('utf-8', byteOffset, byteOffset+field.length);
+    // read the value out with given encoding
+    const value = Iconv.decode(chunk.slice(byteOffset, byteOffset+field.length), encoding);
 
     // assign the field into the record
     record[field.name] = typeHandlers[field.type](value);
