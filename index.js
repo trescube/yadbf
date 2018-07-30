@@ -11,14 +11,13 @@ class YADBF extends Transform {
     this.offset = validateOffset(options.offset);
     this.size = validateSize(options.size);
     this.includeDeletedRecords = validateDeleted(options.deleted);
+    this.encoding = validateEncoding(options.encoding);
 
     // keep track of how many records have been made readable (used for end-of-stream detection)
     this.totalRecordCount = 0;
 
     // keep track of how many records *could* have been pushed (used for pagination)
     this.eligibleRecordCount = 0;
-
-    this.encoding = options.encoding || 'utf-8';
   }
 
   _final(callback) {
@@ -386,6 +385,19 @@ function validateDeleted(deleted) {
   }
 
   return deleted;
+}
+
+// validates that `encoding` exists
+function validateEncoding(encoding) {
+  if (encoding === undefined) {
+    return 'utf-8';
+  }
+
+  if (!Iconv.encodingExists(encoding)) {
+    throw new Error(`encoding not recognized: '${encoding}'`);
+  }
+
+  return encoding;
 }
 
 module.exports = YADBF;
