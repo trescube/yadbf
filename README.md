@@ -51,6 +51,7 @@ The following options are available and can be passed to the constructor in a si
 | `deleted` | boolean | records flagged as deleted should be returned, non-boolean value is treated as "not supplied" | `false` |
 | `offset` | integer | number of records to process before emitting | `0` |
 | `size` | integer | number of records to emit | `Infinity` |
+| `encoding` | string | encoding supported by [iconv-lite](https://github.com/ashtuchkin/iconv-lite/wiki/Supported-Encodings) | `utf-8` |
 
 `offset` and `size` are implemented to follow pagination functionality.  Errors are thrown if any option value type is not the supported type.
 
