@@ -1,6 +1,7 @@
 const assert = require('assert');
 const YADBF = require('..');
 const { Readable } = require('stream');
+const Iconv = require('iconv-lite');
 
 class DBF {
   constructor (build) {
@@ -213,11 +214,12 @@ class Record {
   get buffer() {
     const totalLength = this.build._sizes.reduce((acc, cur) => acc+cur, 1);
 
-    const buffer = Buffer.alloc(totalLength);
+    let buffer = Buffer.alloc(totalLength);
     buffer.write(this.build._deleted, 0, 1);
 
     this.build._values.reduce((offset, value, idx) => {
-      buffer.write(value, offset, value.length);
+      const buf = Iconv.encode(value, this.build._encoding);
+      buf.copy(buffer, offset);
       return offset + this.build._sizes[idx];
     }, 1);
     return buffer;
@@ -229,6 +231,7 @@ class Record {
         this._deleted = ' ';
         this._values = [];
         this._sizes = [];
+        this._encoding = 'utf-8';
       }
 
       field(_value, _field) {
@@ -239,6 +242,11 @@ class Record {
 
       deleted(_deleted = '*') {
         this._deleted = _deleted;
+        return this;
+      }
+
+      encoding(_encoding) {
+        this._encoding = _encoding;
         return this;
       }
 
@@ -1527,4 +1535,106 @@ describe('options', () => {
         });
     });
   });
+
+    describe('encoding', () => {
+      it('default (utf-8)', done => {
+        const field = new Field.Builder('field', 'C').size(10).build();
+
+        const record1 = new Record.Builder().field('record 1', field).build();
+        const record2 = new Record.Builder().field('record 2', field).build();
+        const record3 = new Record.Builder().field('record 3', field).build();
+
+        const dbf = new DBF.Builder()
+          .field(field)
+          .record(record1)
+          .record(record2)
+          .record(record3)
+          .build();
+
+        const readableStream = new Readable();
+        readableStream.push(dbf.buffer);
+        readableStream.push(null);
+
+        const records = [];
+        
+        readableStream
+          .pipe(new YADBF())
+          .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+          .on('data', record => records.push(record) )
+          .on('end', () => {
+            assert.deepEqual(records.map(r => r.field), [ 'record 1', 'record 2', 'record 3' ]);
+            done();
+          });
+      });
+
+      it('MS-DOS Cyrillic CIS 1 (866)', done => {
+        const field = new Field.Builder('field', 'C').size(10).build();
+
+        const record1 = new Record.Builder().field('текст 1', field).encoding('866').build();
+        const record2 = new Record.Builder().field('текст 2', field).encoding('866').build();
+        const record3 = new Record.Builder().field('текст 3', field).encoding('866').build();
+
+        const dbf = new DBF.Builder()
+          .field(field)
+          .record(record1)
+          .record(record2)
+          .record(record3)
+          .build();
+
+        const readableStream = new Readable();
+        readableStream.push(dbf.buffer);
+        readableStream.push(null);
+
+        const records = [];
+        
+        readableStream
+          .pipe(new YADBF({ encoding: '866' }))
+          .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+          .on('data', record => records.push(record) )
+          .on('end', () => {
+            assert.deepEqual(records.map(r => r.field), [ 'текст 1', 'текст 2', 'текст 3' ]);
+            done();
+          });
+      });
+
+      it('Windows-1251 (cp1251)', done => {
+        const field = new Field.Builder('field', 'C').size(10).build();
+
+        const record1 = new Record.Builder().field('текст 1', field).encoding('cp1251').build();
+        const record2 = new Record.Builder().field('текст 2', field).encoding('cp1251').build();
+        const record3 = new Record.Builder().field('текст 3', field).encoding('cp1251').build();
+
+        const dbf = new DBF.Builder()
+          .field(field)
+          .record(record1)
+          .record(record2)
+          .record(record3)
+          .build();
+
+        const readableStream = new Readable();
+        readableStream.push(dbf.buffer);
+        readableStream.push(null);
+
+        const records = [];
+        
+        readableStream
+          .pipe(new YADBF({ encoding: 'cp1251' }))
+          .on('error', assert.fail.bind(null, 'no error events should have been emitted'))
+          .on('data', record => records.push(record) )
+          .on('end', () => {
+            assert.deepEqual(records.map(r => r.field), [ 'текст 1', 'текст 2', 'текст 3' ]);
+            done();
+          });
+      });
+
+      it('unrecognized encoding should emit error', done => {
+        assert.throws(() => {
+          const yadbf = new YADBF({ encoding: 'qwer' });
+        }, /^Error: encoding not recognized: 'qwer'$/);
+        done();
+      });
+
+    });
+    
+  
 });

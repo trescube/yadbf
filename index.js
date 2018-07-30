@@ -1,4 +1,5 @@
 const { Transform } = require('stream');
+const Iconv = require('iconv-lite');
 
 class YADBF extends Transform {
   constructor(options = {}) {
@@ -10,6 +11,7 @@ class YADBF extends Transform {
     this.offset = validateOffset(options.offset);
     this.size = validateSize(options.size);
     this.includeDeletedRecords = validateDeleted(options.deleted);
+    this.encoding = validateEncoding(options.encoding);
 
     // keep track of how many records have been made readable (used for end-of-stream detection)
     this.totalRecordCount = 0;
@@ -62,7 +64,7 @@ class YADBF extends Transform {
       const recordSizedChunk = this.unconsumedBytes.slice(0, this.header.numberOfBytesInRecord);
 
       try {
-        const record = convertToRecord(recordSizedChunk, this.header);
+        const record = convertToRecord(recordSizedChunk, this.header, this.encoding);
 
         // only push if it's eligble for output and within the pagination params
         if (isEligibleForOutput(record, this.includeDeletedRecords)) {
@@ -306,7 +308,7 @@ function parseHeaderField(fieldBytes, val, i) {
 }
 
 // converts a record-sized chunk into an object based on the metadata available in `header`
-function convertToRecord(chunk, header) {
+function convertToRecord(chunk, header, encoding) {
   const record = {
     '@meta': {
       deleted: isDeleted(chunk)
@@ -318,8 +320,8 @@ function convertToRecord(chunk, header) {
   let byteOffset = 1;
 
   header.fields.forEach(field => {
-    // read the value out as UTF-8
-    const value = chunk.toString('utf-8', byteOffset, byteOffset+field.length);
+    // read the value out with given encoding
+    const value = Iconv.decode(chunk.slice(byteOffset, byteOffset+field.length), encoding);
 
     // assign the field into the record
     record[field.name] = typeHandlers[field.type](value);
@@ -383,6 +385,19 @@ function validateDeleted(deleted) {
   }
 
   return deleted;
+}
+
+// validates that `encoding` exists
+function validateEncoding(encoding) {
+  if (encoding === undefined) {
+    return 'utf-8';
+  }
+
+  if (!Iconv.encodingExists(encoding)) {
+    throw new Error(`encoding not recognized: '${encoding}'`);
+  }
+
+  return encoding;
 }
 
 module.exports = YADBF;
