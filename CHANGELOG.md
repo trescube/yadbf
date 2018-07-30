@@ -1,3 +1,7 @@
+## 3.1.0: 2018/07/30
+
+- added encoding support (thx, @D5T!)
+
 ## 3.0.2: 2018/07/27
 
 - throw proper errors in all cases
