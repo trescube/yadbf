@@ -3,6 +3,7 @@
 [![Greenkeeper badge](https://badges.greenkeeper.io/trescube/yadbf.svg)](https://greenkeeper.io/)
 [![Build Status](https://travis-ci.org/trescube/yadbf.svg?branch=master)](https://travis-ci.org/trescube/yadbf)
 [![Coverage Status](https://coveralls.io/repos/github/trescube/yadbf/badge.svg?branch=master)](https://coveralls.io/github/trescube/yadbf?branch=master)
+[![Dependency Status](https://david-dm.org/trescube/yadbf.svg)](https://david-dm.org/trescube/yadbf)
 
 This project is a streaming DBF parser that throws errors for the slightest transgressions.
 
