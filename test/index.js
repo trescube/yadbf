@@ -977,7 +977,7 @@ describe('record parsing', () => {
           '@meta': {
             deleted: false
           },
-          field: new Date(1952, 7, 19)
+          field: new Date('1952-07-19')
         }))
         .on('end', done);
     });
