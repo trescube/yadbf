@@ -126,9 +126,11 @@ const validMTypeValueRegex = /^(\d{10}| {10})$/;
 const typeHandlers = {
   D(value) {
     return new Date(
-      value.substr(0, 4),
-      value.substr(4, 2),
-      value.substr(6, 2)
+        value.substr(0, 4)
+        + '-'
+        + value.substr(4, 2)
+        + '-'
+        + value.substr(6, 2)
     );
   },
   L(value) {
