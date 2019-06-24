@@ -1,3 +1,7 @@
+## 3.2.0: 2019/06/24
+
+- fixed date parsing (thx, @Superlokkus!)
+
 ## 3.1.0: 2018/07/30
 
 - added encoding support (thx, @D5T!)
