@@ -1,3 +1,7 @@
+## 3.2.1: 2019/07/17
+
+- bumped iconv-lite version
+
 ## 3.2.0: 2019/06/24
 
 - fixed date parsing (thx, @Superlokkus!)
