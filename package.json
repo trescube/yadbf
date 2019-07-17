@@ -39,6 +39,6 @@
     "test"
   ],
   "dependencies": {
-    "iconv-lite": "^0.4.23"
+    "iconv-lite": "^0.5.0"
   }
 }
