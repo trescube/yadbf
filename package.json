@@ -1,6 +1,6 @@
 {
   "name": "yadbf",
-  "version": "3.2.2",
+  "version": "3.2.3",
   "description": "An error-throwing DBF/dbase parsing transform stream",
   "homepage": "https://github.com/trescube/yadbf#readme",
   "author": "Stephen Hess",
@@ -29,10 +29,10 @@
     "url": "https://github.com/trescube/yadbf.git"
   },
   "devDependencies": {
-    "coveralls": "^3.0.6",
-    "eslint": "^6.4.0",
-    "mocha": "^6.2.0",
-    "nyc": "^14.1.1"
+    "coveralls": "^3.0.9",
+    "eslint": "^6.8.0",
+    "mocha": "^6.2.2",
+    "nyc": "^15.0.0"
   },
   "pre-commit": [
     "lint",
