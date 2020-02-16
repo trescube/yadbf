@@ -33,7 +33,7 @@ class YADBF extends Transform {
 
   _transform(chunk, encoding, callback) {
     // append the chunk to unconsumed bytes for easier bookkeeping
-    this.unconsumedBytes = Buffer.concat( [this.unconsumedBytes, chunk] );
+    this.unconsumedBytes = Buffer.concat([this.unconsumedBytes, chunk]);
 
     // if the header hasn't been parsed yet, do so now and emit it
     if (!this.header) {
@@ -74,11 +74,11 @@ class YADBF extends Transform {
           }
 
           // increment total # of records pushed for pagination check
-          this.eligibleRecordCount+=1;
+          this.eligibleRecordCount += 1;
         }
 
         // increment total # of records consumed for end-of-stream check
-        this.totalRecordCount+=1;
+        this.totalRecordCount += 1;
 
         // remove the slice from the unconsumed bytes
         this.unconsumedBytes = this.unconsumedBytes.slice(recordSizedChunk.length);
@@ -92,7 +92,7 @@ class YADBF extends Transform {
 
     // if all the records have been emitted, proceed with shutdown
     if (allRecordsHaveBeenProcessed(this.header.numberOfRecords, this.totalRecordCount) &&
-        aSingleByteRemains(this.unconsumedBytes)) {
+      aSingleByteRemains(this.unconsumedBytes)) {
       // throw an error if the last byte isn't the expected EOF marker
       if (!firstByteIsEOFMarker(this.unconsumedBytes)) {
         this.destroy('Last byte of file is not end-of-file marker');
@@ -127,11 +127,11 @@ const validMTypeValueRegex = /^(\d{10}| {10})$/;
 const typeHandlers = {
   D(value) {
     return new Date(
-        value.substr(0, 4)
-        + '-'
-        + value.substr(4, 2)
-        + '-'
-        + value.substr(6, 2)
+      value.substr(0, 4)
+      + '-'
+      + value.substr(4, 2)
+      + '-'
+      + value.substr(6, 2)
     );
   },
   L(value) {
@@ -215,11 +215,11 @@ function parseHeader(buffer) {
   }
 
   // there are 32 bytes per header field + 1 byte for terminator + 32 bytes for the initial header
-  const numberOfFields = (numberOfHeaderBytes-32-1)/32;
+  const numberOfFields = (numberOfHeaderBytes - 32 - 1) / 32;
 
   const fieldBytes = buffer.slice(32, numberOfHeaderBytes);
   // emit an error if the header bytes does not end with 0x0D (per spec)
-  if (fieldBytes.readUInt8(numberOfHeaderBytes-32-1) !== 0x0D) {
+  if (fieldBytes.readUInt8(numberOfHeaderBytes - 32 - 1) !== 0x0D) {
     throw new Error(`Invalid field descriptor array terminator at byte ${numberOfHeaderBytes}`);
   }
 
@@ -252,7 +252,7 @@ function parseHeader(buffer) {
     numberOfBytesInRecord: buffer.readInt16LE(10),
     hasProductionMDXFile: hasProductionMDXFile,
     langaugeDriverId: buffer.readUInt8(29),
-    fields: Array.from( {length: numberOfFields }, parseHeaderField.bind(null, fieldBytes))
+    fields: Array.from({ length: numberOfFields }, parseHeaderField.bind(null, fieldBytes))
   };
 
   // if there are any duplicate field names, throw an error
@@ -268,7 +268,7 @@ function parseHeader(buffer) {
 
 // parses up 32 bytes from `fieldBytes` into a valid field definition
 function parseHeaderField(fieldBytes, val, i) {
-  const field = fieldBytes.slice(i*32, i*32+32);
+  const field = fieldBytes.slice(i * 32, i * 32 + 32);
 
   // extract the field length from the 16th byte
   const length = field.readUInt8(16);
@@ -327,7 +327,7 @@ function convertToRecord(chunk, header, encoding, customFieldParsers) {
     const bValue = chunk.slice(byteOffset, byteOffset + field.length);
 
     // assign the field into the record
-    if (customFieldParsers[field.name]){
+    if (customFieldParsers[field.name]) {
       record[field.name] = customFieldParsers[field.name](bValue);
     } else {
       const value = Iconv.decode(bValue, encoding);
