@@ -12,6 +12,7 @@ class YADBF extends Transform {
     this.size = validateSize(options.size);
     this.includeDeletedRecords = validateDeleted(options.deleted);
     this.encoding = validateEncoding(options.encoding);
+    this.customFieldParsers = options.customFieldParsers || {};
 
     // keep track of how many records have been made readable (used for end-of-stream detection)
     this.totalRecordCount = 0;
@@ -64,7 +65,7 @@ class YADBF extends Transform {
       const recordSizedChunk = this.unconsumedBytes.slice(0, this.header.numberOfBytesInRecord);
 
       try {
-        const record = convertToRecord(recordSizedChunk, this.header, this.encoding);
+        const record = convertToRecord(recordSizedChunk, this.header, this.encoding, this.customFieldParsers);
 
         // only push if it's eligble for output and within the pagination params
         if (isEligibleForOutput(record, this.includeDeletedRecords)) {
@@ -310,7 +311,7 @@ function parseHeaderField(fieldBytes, val, i) {
 }
 
 // converts a record-sized chunk into an object based on the metadata available in `header`
-function convertToRecord(chunk, header, encoding) {
+function convertToRecord(chunk, header, encoding, customFieldParsers) {
   const record = {
     '@meta': {
       deleted: isDeleted(chunk)
@@ -323,10 +324,16 @@ function convertToRecord(chunk, header, encoding) {
 
   header.fields.forEach(field => {
     // read the value out with given encoding
-    const value = Iconv.decode(chunk.slice(byteOffset, byteOffset+field.length), encoding);
+    const bValue = chunk.slice(byteOffset, byteOffset + field.length);
 
     // assign the field into the record
-    record[field.name] = typeHandlers[field.type](value);
+    if (customFieldParsers[field.name]){
+      record[field.name] = customFieldParsers[field.name](bValue);
+    } else {
+      const value = Iconv.decode(bValue, encoding);
+      record[field.name] = typeHandlers[field.type](value);
+    }
+
 
     // update where the next field starts
     byteOffset += field.length;
