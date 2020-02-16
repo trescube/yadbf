@@ -2,6 +2,21 @@ const { Transform } = require('stream');
 const Iconv = require('iconv-lite');
 
 class YADBF extends Transform {
+
+  /**
+   * 
+   * @param {options} [options]
+   * @param {number} [options.offset=0]
+   * @param {number} [options.size=Infinity]
+   * @param {boolean} [options.deleted=false] whether deleted records should be included on the output
+   * @param {string} [options.encoding="utf-8"] 
+   * @param {object} [options.customFieldParsers] an object whose keys are field names and their values are functions to be called for custom-parsing them. The parameters passed are the Buffer value of the field and and object describing the field
+   * @param {object} [options.quirks] 
+   * @param {booelan} [options.quirks.typeL_allowUnknownValues] treat any unknown value as unknown instead of throwing
+   * @param {booelan} [options.quirks.typeM_allowLeftSpacePadding] allow M-type fields to be left-padded with spaces
+   * @param {booelan} [options.quirks.ignoreUnknownEncryptionByte] ignores if the encryption flag is different then 0 or 1
+   * @param {booelan} [options.quirks.allowFieldLength255] allow field lengths to be equal to 255
+   */
   constructor(options = {}) {
     super({ readableObjectMode: true });
 
@@ -13,6 +28,7 @@ class YADBF extends Transform {
     this.includeDeletedRecords = validateDeleted(options.deleted);
     this.encoding = validateEncoding(options.encoding);
     this.customFieldParsers = options.customFieldParsers || {};
+    this.quirks = options.quirks || {};
 
     // keep track of how many records have been made readable (used for end-of-stream detection)
     this.totalRecordCount = 0;
@@ -45,7 +61,7 @@ class YADBF extends Transform {
 
       // otherwise, attempt to parse the header
       try {
-        this.header = parseHeader(this.unconsumedBytes);
+        this.header = parseHeader.call(this, this.unconsumedBytes);
 
         // emit the header for outside consumption
         this.emit('header', this.header);
@@ -65,7 +81,7 @@ class YADBF extends Transform {
       const recordSizedChunk = this.unconsumedBytes.slice(0, this.header.numberOfBytesInRecord);
 
       try {
-        const record = convertToRecord(recordSizedChunk, this.header, this.encoding, this.customFieldParsers);
+        const record = convertToRecord.call(this, recordSizedChunk, this.header, this.encoding);
 
         // only push if it's eligble for output and within the pagination params
         if (isEligibleForOutput(record, this.includeDeletedRecords)) {
@@ -122,6 +138,7 @@ const falseyValues = new Set(['N', 'n', 'F', 'f']);
 
 // valid M-type value regex (10 digits or 10 spaces)
 const validMTypeValueRegex = /^(\d{10}| {10})$/;
+const validMTypeValuePaddedRegex = /^ {0,10}\d{0,10}$/;
 
 // type handlers keyed by the single character type designator
 const typeHandlers = {
@@ -139,7 +156,7 @@ const typeHandlers = {
       return true;
     } else if (falseyValues.has(value)) {
       return false;
-    } else if (value !== '?' && value !== ' ') { // '?' or ' ' means undefined
+    } else if (value !== '?' && value !== ' ' && !this.quirks.typeL_allowUnknownValues) { // '?' or ' ' means undefined
       throw new Error(`Invalid L-type field value: ${value}`);
     }
   },
@@ -153,7 +170,8 @@ const typeHandlers = {
     return value.replace(/[\u0000 ]+$/, '');
   },
   M(value) {
-    if (!validMTypeValueRegex.test(value)) {
+    let regex = this.quirks.typeM_allowLeftSpacePadding ? validMTypeValuePaddedRegex : validMTypeValueRegex;
+    if (!regex.test(value)) {
       throw new Error(`Invalid M-type field value: '${value}'`);
     } else {
       return value;
@@ -229,7 +247,7 @@ function parseHeader(buffer) {
     throw new Error('Encryption flag is set, cannot process');
   }
   // valid values for the encryption byte are 0x00 and 0x01, emit an error otherwise
-  if (encryptionByte > 1) {
+  if (encryptionByte > 1 && !this.quirks.ignoreUnknownEncryptionByte) {
     throw new Error(`Invalid encryption flag value: ${encryptionByte}`);
   }
 
@@ -252,7 +270,7 @@ function parseHeader(buffer) {
     numberOfBytesInRecord: buffer.readInt16LE(10),
     hasProductionMDXFile: hasProductionMDXFile,
     langaugeDriverId: buffer.readUInt8(29),
-    fields: Array.from({ length: numberOfFields }, parseHeaderField.bind(null, fieldBytes))
+    fields: Array.from({ length: numberOfFields }, parseHeaderField.bind(this, fieldBytes))
   };
 
   // if there are any duplicate field names, throw an error
@@ -272,7 +290,7 @@ function parseHeaderField(fieldBytes, val, i) {
 
   // extract the field length from the 16th byte
   const length = field.readUInt8(16);
-  if (length === 255) {
+  if (length === 255 && !this.quirks.allowFieldLength255) {
     throw new Error('Field length must be less than 255');
   }
 
@@ -311,7 +329,7 @@ function parseHeaderField(fieldBytes, val, i) {
 }
 
 // converts a record-sized chunk into an object based on the metadata available in `header`
-function convertToRecord(chunk, header, encoding, customFieldParsers) {
+function convertToRecord(chunk, header, encoding) {
   const record = {
     '@meta': {
       deleted: isDeleted(chunk)
@@ -327,11 +345,11 @@ function convertToRecord(chunk, header, encoding, customFieldParsers) {
     const bValue = chunk.slice(byteOffset, byteOffset + field.length);
 
     // assign the field into the record
-    if (customFieldParsers[field.name]) {
-      record[field.name] = customFieldParsers[field.name](bValue);
+    if (this.customFieldParsers[field.name]) {
+      record[field.name] = this.customFieldParsers[field.name](bValue, field);
     } else {
       const value = Iconv.decode(bValue, encoding);
-      record[field.name] = typeHandlers[field.type](value);
+      record[field.name] = typeHandlers[field.type].call(this, value);
     }
 
 
