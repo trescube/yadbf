@@ -243,7 +243,7 @@ function parseHeader(buffer) {
 
   const encryptionByte = buffer.readUInt8(15);
   // if the source is encrypted, then emit an error
-  if (encryptionByte === 1) {
+  if (encryptionByte === 1 && !this.quirks.ignoreUnknownEncryptionByte) {
     throw new Error('Encryption flag is set, cannot process');
   }
   // valid values for the encryption byte are 0x00 and 0x01, emit an error otherwise
