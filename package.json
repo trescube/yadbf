@@ -1,6 +1,6 @@
 {
   "name": "yadbf",
-  "version": "3.2.3",
+  "version": "3.3.0",
   "description": "An error-throwing DBF/dbase parsing transform stream",
   "homepage": "https://github.com/trescube/yadbf#readme",
   "author": "Stephen Hess",
