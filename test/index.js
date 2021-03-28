@@ -269,10 +269,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Unable to parse first 32 bytes from header, found 0 byte(s)');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('insufficient header bytes should emit error', done => {
@@ -287,10 +287,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Unable to parse first 32 bytes from header, found 31 byte(s)');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 
@@ -324,10 +324,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Unsupported version: 2');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 
@@ -343,10 +343,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Encryption flag is set, cannot process');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('encrypted flag set to 0x00 in header should not emit error', done => {
@@ -377,10 +377,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid encryption flag value: 2');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 
@@ -413,10 +413,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid number of header bytes: 34');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 
@@ -431,10 +431,10 @@ describe('header parsing', () => {
       .pipe(new YADBF())
       .on('error', err => {
         assert.equal(err, 'Error: Invalid field descriptor array terminator at byte 33');
+        done();
       })
       .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-      .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-      .on('end', done);
+      .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
   });
 
   describe('values for production MDX file existence', () => {
@@ -466,10 +466,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid production MDX file existence value: 2');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header event should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 
@@ -487,10 +487,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Field length must be less than 255');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('field type not one of C, D, F, L, M, or N should emit error', done => {
@@ -506,10 +506,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Field type must be one of: C, D, F, L, M, N');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('non-0x00/0x01 value for production MDX file index tag should emit error', done => {
@@ -525,10 +525,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid indexed in production MDX file value: 2');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('field with type D and not 8 bytes in length should emit error', done => {
@@ -544,10 +544,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid D (date) field length: 9');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('field with type L and not 1 byte in length should emit error', done => {
@@ -563,10 +563,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid L (logical) field length: 2');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('field with type M and not 10 bytes in length should emit error', done => {
@@ -582,10 +582,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid M (memo) field length: 11');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('duplicate field name should emit error', done => {
@@ -603,10 +603,10 @@ describe('header parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Duplicate field name \'field1\'');
+          done();
         })
         .on('header', assert.fail.bind(null, 'no header events should have been emitted'))
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 
@@ -867,9 +867,9 @@ describe('record parsing', () => {
         .on('header', header => assert.ok('header should have been emitted'))
         .on('error', err => {
           assert.equal(err, 'Error: Invalid deleted record value: #');
+          done();
         })
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
 
     it('an error should be emitted when file does not end with 0x1A', done => {
@@ -895,8 +895,8 @@ describe('record parsing', () => {
         .on('data', record => assert.ok('record was emitted'))
         .on('error', err => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
-        })
-        .on('end', done);
+          done();
+        });
     });
 
     it('an error should be emitted when last character is not 0x1A', done => {
@@ -922,8 +922,8 @@ describe('record parsing', () => {
         .on('data', record => assert.ok('record was emitted'))
         .on('error', err => {
           assert.equal(err, 'Last byte of file is not end-of-file marker');
-        })
-        .on('end', done);
+          done();
+        });
     });
 
   });
@@ -1098,9 +1098,9 @@ describe('record parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid L-type field value: R');
+          done();
         })
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 
@@ -1238,9 +1238,9 @@ describe('record parsing', () => {
         .pipe(new YADBF())
         .on('error', err => {
           assert.equal(err, 'Error: Invalid M-type field value: \'     4    \'');
+          done();
         })
-        .on('data', assert.fail.bind(null, 'no record events should have been emitted'))
-        .on('end', done);
+        .on('data', assert.fail.bind(null, 'no record events should have been emitted'));
     });
   });
 });

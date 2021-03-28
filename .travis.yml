@@ -5,6 +5,8 @@ notifications:
 node_js:
   - 8
   - 10
+  - 12
+  - 14
 matrix:
   fast_finish: true
 script: yarn run travis
